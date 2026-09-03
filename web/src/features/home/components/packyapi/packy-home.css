@@ -49,6 +49,11 @@ html.packy-snap-enabled .packy-home .packy-page {
   scroll-snap-stop: normal;
 }
 
+html.packy-snap-enabled .packy-footer-snap {
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
+}
+
 .dark .packy-home {
   --bg-0: #0a0a0c;
   --bg-1: #0e0f13;

@@ -42,4 +42,12 @@ describe('footer layout', () => {
 
     expect(content).toHaveClass('justify-center')
   })
+
+  test('allows the home page to mark the footer as a snap target', () => {
+    const rendered = render(<Footer className='packy-footer-snap' />)
+
+    expect(rendered.container.querySelector('footer')).toHaveClass(
+      'packy-footer-snap'
+    )
+  })
 })

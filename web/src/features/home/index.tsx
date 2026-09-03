@@ -123,7 +123,7 @@ export function Home() {
   return (
     <PublicLayout showMainContainer={false}>
       <PackyHome isAuthenticated={isAuthenticated} />
-      <Footer />
+      <Footer className='packy-footer-snap' />
     </PublicLayout>
   )
 }
