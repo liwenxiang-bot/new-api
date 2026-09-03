@@ -122,6 +122,8 @@ nano docker-compose.yml
 docker-compose up -d
 ```
 
+维护自定义分支并部署到生产镜像时，请参考[自定义分支生产部署手册](./docs/installation/custom-production-deployment.zh-CN.md)。
+
 <details>
 <summary><strong>使用 Docker 命令</strong></summary>
 
