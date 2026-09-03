@@ -26,7 +26,7 @@ import { useTheme } from '@/context/theme-provider'
 import { isLikelyHtml } from '@/lib/content-format'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { SimpleHome } from './components/simple-home'
+import { PackyHome } from './components/packyapi/packy-home'
 import { useHomePageContent } from './hooks'
 
 export function Home() {
@@ -122,7 +122,7 @@ export function Home() {
 
   return (
     <PublicLayout showMainContainer={false}>
-      <SimpleHome isAuthenticated={isAuthenticated} />
+      <PackyHome isAuthenticated={isAuthenticated} />
       <Footer />
     </PublicLayout>
   )
