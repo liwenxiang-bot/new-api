@@ -197,7 +197,7 @@ export function Footer(props: FooterProps) {
         )}
       >
         <div className='mx-auto w-full max-w-6xl px-6 py-5'>
-          <div className='bg-muted/20 border-border/50 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl border px-4 py-4 backdrop-blur-sm sm:px-5'>
+          <div className='bg-muted/20 border-border/50 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 rounded-2xl border px-4 py-4 backdrop-blur-sm sm:px-5'>
             <div
               className='custom-footer text-muted-foreground min-w-0 text-left text-sm'
               dangerouslySetInnerHTML={{ __html: footerHtml }}
