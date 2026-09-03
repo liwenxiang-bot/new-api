@@ -36,6 +36,19 @@ For commercial licensing, please contact support@quantumnous.com
   color: var(--text-0);
 }
 
+/* Match PackyAPI's full-page browsing rhythm while this landing page is open.
+   The document remains the scroll container so the fixed public header keeps
+   receiving its existing window scroll events. */
+html.packy-snap-enabled {
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+html.packy-snap-enabled .packy-home .packy-page {
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
+}
+
 .dark .packy-home {
   --bg-0: #0a0a0c;
   --bg-1: #0e0f13;
@@ -261,6 +274,11 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 @media (max-width: 768px) {
+  html.packy-snap-enabled {
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+  }
+
   .packy-home .packy-page {
     min-height: auto;
   }
@@ -274,6 +292,11 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html.packy-snap-enabled {
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+  }
+
   .packy-home .landing-fade-up,
   .packy-home .landing-fade-in,
   .packy-home .landing-scale-in,

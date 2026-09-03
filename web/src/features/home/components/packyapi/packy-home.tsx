@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useStatus } from '@/hooks/use-status'
@@ -52,6 +53,16 @@ function normalizeBaseUrl(value: unknown): string | null {
 export function PackyHome(props: PackyHomeProps) {
   const { t } = useTranslation()
   const { status } = useStatus()
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.add('packy-snap-enabled')
+
+    return () => {
+      root.classList.remove('packy-snap-enabled')
+    }
+  }, [])
+
   const statusData = status?.data
   const configuredBaseUrl = normalizeBaseUrl(
     status?.server_address ?? statusData?.server_address
