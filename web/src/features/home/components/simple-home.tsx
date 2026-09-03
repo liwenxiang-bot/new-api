@@ -20,10 +20,7 @@ import { Link } from '@tanstack/react-router'
 import {
   ArrowRight,
   BarChart3,
-  BookOpen,
-  Check,
   Code2,
-  Copy,
   KeyRound,
   Route,
   Settings2,
@@ -33,167 +30,19 @@ import { useTranslation } from 'react-i18next'
 
 import { AnimateInView } from '@/components/animate-in-view'
 import { Button } from '@/components/ui/button'
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useStatus } from '@/hooks/use-status'
-import { useSystemConfig } from '@/hooks/use-system-config'
+
+import { Hero } from './sections/hero'
 
 interface SimpleHomeProps {
   isAuthenticated: boolean
 }
 
-function DocsButton(props: { href: string; label: string }) {
-  const isExternal = props.href.startsWith('http')
-
-  if (isExternal) {
-    return (
-      <Button
-        variant='outline'
-        className='h-10 rounded-lg px-4'
-        render={
-          <a href={props.href} target='_blank' rel='noopener noreferrer' />
-        }
-      >
-        <BookOpen className='size-4' />
-        {props.label}
-      </Button>
-    )
-  }
-
-  return (
-    <Button
-      variant='outline'
-      className='h-10 rounded-lg px-4'
-      render={<Link to={props.href} />}
-    >
-      <BookOpen className='size-4' />
-      {props.label}
-    </Button>
-  )
-}
-
-function ApiPreview() {
-  const { t } = useTranslation()
-
-  return (
-    <div className='border-border bg-card overflow-hidden rounded-2xl border shadow-xs'>
-      <div className='border-border flex items-center justify-between border-b px-4 py-3'>
-        <div className='flex items-center gap-2'>
-          <span className='bg-primary/80 size-2 rounded-full' aria-hidden />
-          <span className='text-sm font-medium'>{t('API')}</span>
-        </div>
-        <span className='text-muted-foreground text-xs'>
-          {t('Multi-protocol Compatible')}
-        </span>
-      </div>
-
-      <div className='bg-muted/20 p-4'>
-        <div className='mb-3 flex items-center justify-between gap-3'>
-          <span className='text-muted-foreground text-xs'>
-            {t(
-              'Use our unified OpenAI-compatible endpoint in your applications'
-            )}
-          </span>
-          <span className='bg-primary/10 text-primary shrink-0 rounded-md px-2 py-1 font-mono text-[10px] font-semibold'>
-            POST
-          </span>
-        </div>
-
-        <div className='border-border bg-background rounded-lg border p-3 font-mono text-xs'>
-          <div className='text-muted-foreground mb-3 flex flex-wrap gap-x-2 gap-y-1'>
-            <span>/v1/chat/completions</span>
-          </div>
-          <pre className='text-foreground/80 overflow-x-auto leading-6 whitespace-pre-wrap'>{`{
-  "model": "your-model",
-  "messages": [{ "role": "user", "content": "..." }]
-}`}</pre>
-        </div>
-
-        <div className='text-muted-foreground mt-3 flex items-center gap-2 text-xs'>
-          <Check className='text-primary size-3.5' />
-          <span>
-            {t('Complete API documentation with multi-language SDK support')}
-          </span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function EndpointCopy(props: { baseUrl: string }) {
-  const { t } = useTranslation()
-  const { copiedText, copyToClipboard } = useCopyToClipboard({
-    notify: true,
-    successMessage: t('Copied'),
-  })
-  const copied = copiedText === props.baseUrl
-
-  return (
-    <div className='border-border bg-card mt-8 w-full max-w-xl rounded-xl border p-3 shadow-xs'>
-      <div className='text-muted-foreground mb-2 flex min-w-0 items-center gap-3 text-xs'>
-        <span className='shrink-0'>{t('Server Address')}</span>
-        <span className='text-muted-foreground/60 min-w-0 flex-1 truncate text-right text-[10px]'>
-          {t('OpenAI')}: /v1
-        </span>
-      </div>
-      <div className='border-border bg-muted/20 flex items-center gap-2 rounded-lg border px-3 py-2'>
-        <code className='text-foreground/80 min-w-0 flex-1 truncate font-mono text-xs sm:text-sm'>
-          {props.baseUrl}
-        </code>
-        <button
-          type='button'
-          className='text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring/40 flex size-8 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:ring-2'
-          onClick={() => void copyToClipboard(props.baseUrl)}
-          aria-label={copied ? t('Copied') : t('Copy URL')}
-        >
-          {copied ? (
-            <Check className='text-primary size-4' />
-          ) : (
-            <Copy className='size-4' />
-          )}
-        </button>
-      </div>
-    </div>
-  )
-}
-
 export function SimpleHome(props: SimpleHomeProps) {
   const { t } = useTranslation()
   const { status } = useStatus()
-  const { systemName, logo } = useSystemConfig()
 
   const isAuthenticated = props.isAuthenticated
-  const docsUrl =
-    (status?.docs_link as string | undefined) || 'https://docs.newapi.pro'
-  const addressCandidate =
-    (status as Record<string, unknown> | null)?.server_address ??
-    (status as Record<string, unknown> | null)?.serverAddress ??
-    (status?.data as Record<string, unknown> | undefined)?.server_address ??
-    (status?.data as Record<string, unknown> | undefined)?.serverAddress
-  const configuredAddress =
-    typeof addressCandidate === 'string' ? addressCandidate.trim() : ''
-  const fallbackBaseUrl =
-    typeof window === 'undefined'
-      ? 'https://your-domain.example'
-      : window.location.origin
-  let baseUrl = fallbackBaseUrl
-  if (configuredAddress) {
-    try {
-      const hostname = new URL(configuredAddress).hostname.toLowerCase()
-      const isLoopback = [
-        'localhost',
-        '127.0.0.1',
-        '0.0.0.0',
-        '::1',
-        '[::1]',
-      ].includes(hostname)
-      if (!isLoopback) {
-        baseUrl = configuredAddress
-      }
-    } catch {
-      baseUrl = configuredAddress
-    }
-  }
-  baseUrl = baseUrl.replace(/\/+$/, '')
   const registerEnabled =
     status?.register_enabled ?? status?.data?.register_enabled
   const selfUseModeEnabled =
@@ -207,13 +56,6 @@ export function SimpleHome(props: SimpleHomeProps) {
     primaryHref = '/sign-in'
     primaryLabel = t('Sign in')
   }
-
-  const capabilities = [
-    t('Multi-protocol Compatible'),
-    t('Routing & Overrides'),
-    t('Rate Limiting'),
-    t('Transparent Billing'),
-  ]
 
   const features = [
     {
@@ -269,74 +111,7 @@ export function SimpleHome(props: SimpleHomeProps) {
 
   return (
     <main>
-      <section className='border-border/60 relative border-b px-6 pt-28 pb-16 md:pt-36 md:pb-24'>
-        <div className='mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-16'>
-          <AnimateInView className='max-w-2xl min-w-0' animation='fade-right'>
-            <div className='border-border bg-muted/40 text-muted-foreground mb-6 inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-xs'>
-              <img
-                src={logo}
-                alt=''
-                className='size-4 shrink-0 rounded object-cover'
-                aria-hidden
-              />
-              <span className='min-w-0 truncate font-medium'>{systemName}</span>
-              <span className='text-border hidden sm:inline'>/</span>
-              <span className='hidden shrink-0 sm:inline'>
-                {t('Powerful API Management Platform')}
-              </span>
-            </div>
-
-            <h1 className='text-4xl leading-[1.2] font-semibold tracking-tight md:text-5xl'>
-              {t('Unified API Gateway for')}
-              <span className='text-primary mt-2 block'>
-                {t('Vast Range of AI Models')}
-              </span>
-            </h1>
-            <p className='text-muted-foreground mt-6 max-w-xl text-base leading-7 md:text-lg'>
-              {t(
-                'A focused home for keys, balance, routing, and service health.'
-              )}
-            </p>
-
-            <div className='mt-8 flex flex-wrap items-center gap-3'>
-              <Button
-                className='group h-10 rounded-lg px-4'
-                render={<Link to={primaryHref} />}
-              >
-                {primaryLabel}
-                <ArrowRight className='size-4 transition-transform group-hover:translate-x-0.5' />
-              </Button>
-              <DocsButton href={docsUrl} label={t('Docs')} />
-              {!isAuthenticated && (
-                <Button
-                  variant='ghost'
-                  className='h-10 rounded-lg px-3'
-                  render={<Link to='/pricing' />}
-                >
-                  {t('View Pricing')}
-                </Button>
-              )}
-            </div>
-
-            <EndpointCopy baseUrl={baseUrl} />
-
-            <div className='mt-10 flex flex-wrap gap-2'>
-              {capabilities.map((capability) => (
-                <span
-                  key={capability}
-                  className='border-border text-muted-foreground rounded-md border bg-transparent px-2.5 py-1.5 text-xs'
-                >
-                  {capability}
-                </span>
-              ))}
-            </div>
-          </AnimateInView>
-
-          <AnimateInView className='min-w-0' animation='fade-left' delay={120}>
-            <ApiPreview />
-          </AnimateInView>
-        </div>
-      </section>
+      <Hero isAuthenticated={isAuthenticated} />
 
       <section className='px-6 py-16 md:py-20'>
         <div className='mx-auto max-w-6xl'>
