@@ -55,7 +55,7 @@ export function Hero(props: HeroProps) {
         />
       </div>
 
-      <div className='relative z-10 mx-auto flex h-full w-full max-w-6xl flex-col justify-start px-5 pt-8 pb-12 md:justify-center md:px-6 md:pt-32 lg:px-8'>
+      <div className='relative z-10 mx-auto flex h-full w-full max-w-6xl flex-col justify-start px-5 pt-24 pb-12 md:justify-center md:px-6 md:pt-32 lg:px-8'>
         <div className='grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]'>
           {/* 左列 */}
           <div className='flex flex-col gap-6 md:gap-7'>
