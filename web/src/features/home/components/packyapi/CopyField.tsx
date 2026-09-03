@@ -53,7 +53,7 @@ export function CopyField({ label, value, endpoints }: Props) {
 
   return (
     <div
-      className='w-full max-w-xl rounded-2xl border p-3 shadow-lg backdrop-blur md:p-4'
+      className='packy-endpoint-card w-full max-w-xl rounded-2xl border p-3 shadow-lg backdrop-blur md:p-4'
       style={{ borderColor: 'var(--border)', background: 'var(--card)' }}
     >
       <span

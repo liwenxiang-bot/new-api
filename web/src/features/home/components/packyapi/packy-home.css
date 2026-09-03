@@ -19,17 +19,35 @@ For commercial licensing, please contact support@quantumnous.com
 /* The old landing page uses its own token names. Keeping them below the
    component root prevents the embedded visual language from changing the app. */
 .packy-home {
-  --bg-0: var(--background);
-  --bg-1: var(--muted);
-  --text-0: var(--foreground);
-  --text-1: var(--muted-foreground);
-  --text-2: color-mix(in oklch, var(--muted-foreground) 74%, var(--background));
+  /* Keep the landing page's original visual tokens across host themes. */
+  --bg-0: #ffffff;
+  --bg-1: #f7f8fa;
+  --card: #ffffff;
+  --border: rgba(15, 23, 42, 0.08);
+  --text-0: #0b0d12;
+  --text-1: #3b4150;
+  --text-2: #6b7280;
+  --primary: #0064fa;
   --accent: #14b8a6;
-  --glow-1: color-mix(in oklch, var(--primary) 18%, transparent);
-  --glow-2: color-mix(in oklch, #14b8a6 16%, transparent);
+  --glow-1: rgba(0, 100, 250, 0.16);
+  --glow-2: rgba(20, 184, 166, 0.16);
   overflow-x: clip;
   background: var(--bg-0);
   color: var(--text-0);
+}
+
+.dark .packy-home {
+  --bg-0: #0a0a0c;
+  --bg-1: #0e0f13;
+  --card: #16161a;
+  --border: rgba(255, 255, 255, 0.08);
+  --text-0: #f7f7f8;
+  --text-1: #c7ccd6;
+  --text-2: #8b909c;
+  --primary: #3b82f6;
+  --accent: #2dd4bf;
+  --glow-1: rgba(0, 100, 250, 0.3);
+  --glow-2: rgba(20, 184, 166, 0.24);
 }
 
 .packy-home .packy-page {
@@ -137,6 +155,28 @@ For commercial licensing, please contact support@quantumnous.com
   ) !important;
 }
 
+/* Keep the original packyapi-home geometry inside the Tailwind v4 theme. */
+.packy-home .packy-endpoint-card {
+  border-radius: 1rem;
+}
+
+.packy-home .endpoint-input {
+  border-radius: 0.75rem;
+}
+
+.packy-home .endpoint-input input {
+  cursor: text;
+}
+
+.packy-home .card-float {
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+}
+
+.packy-home .card-float > div > span {
+  border-radius: 0.75rem;
+}
+
 @keyframes packy-shine-sweep {
   from {
     background-position: 140% 0;
@@ -230,20 +270,6 @@ For commercial licensing, please contact support@quantumnous.com
   .packy-home h1 {
     font-size: clamp(1.5rem, 7.3vw, 2.75rem);
     letter-spacing: 0.01em;
-  }
-
-  .packy-home .endpoint-input {
-    gap: 0.375rem;
-  }
-
-  .packy-home .endpoint-input input {
-    font-size: 0.875rem;
-  }
-}
-
-@media (max-width: 400px) {
-  .packy-home .endpoint-input > .min-w-0.shrink {
-    display: none;
   }
 }
 
