@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { Construction } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
@@ -29,7 +30,6 @@ import { getAboutContent } from './api'
 
 function EmptyAboutState() {
   const { t } = useTranslation()
-  const currentYear = new Date().getFullYear()
 
   return (
     <div className='flex min-h-[60vh] items-center justify-center p-8'>
@@ -45,19 +45,46 @@ function EmptyAboutState() {
             )}
           </p>
         </div>
-        <div className='space-y-4 text-sm'>
+      </div>
+    </div>
+  )
+}
+
+function ProjectAttribution() {
+  const { t } = useTranslation()
+  const currentYear = new Date().getFullYear()
+
+  return (
+    <section
+      className='mx-auto my-8 w-full max-w-4xl px-4'
+      aria-labelledby='open-source-attribution-title'
+    >
+      <div className='border-border bg-card rounded-xl border p-6 md:p-8'>
+        <h2
+          id='open-source-attribution-title'
+          className='text-lg font-semibold'
+        >
+          {t('Open Source Attribution')}
+        </h2>
+        <div className='text-muted-foreground mt-4 space-y-3 text-sm leading-6'>
+          <p>{t('Frontend design and development by New API contributors.')}</p>
+          <p>
+            {t(
+              'This site is based on New API, with customized pages and features.'
+            )}
+          </p>
           <p>
             {t('New API Project Repository:')}{' '}
             <a
               href='https://github.com/QuantumNous/new-api'
               target='_blank'
               rel='noopener noreferrer'
-              className='text-primary hover:underline'
+              className='text-primary break-all hover:underline'
             >
               {t('https://github.com/QuantumNous/new-api')}
             </a>
           </p>
-          <p className='text-muted-foreground'>
+          <p>
             <a
               href='https://github.com/QuantumNous/new-api'
               target='_blank'
@@ -94,7 +121,7 @@ function EmptyAboutState() {
               {t('JustSong')}
             </a>
           </p>
-          <p className='text-muted-foreground'>
+          <p>
             {t('This project must be used in compliance with the')}{' '}
             <a
               href='https://github.com/QuantumNous/new-api/blob/main/LICENSE'
@@ -108,7 +135,7 @@ function EmptyAboutState() {
           </p>
         </div>
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -123,56 +150,39 @@ export function About() {
   const hasContent = rawContent.length > 0
   const isUrl = hasContent && isHttpUrl(rawContent)
   const contentIsHtml = hasContent && isLikelyHtml(rawContent)
+  let content: ReactNode
 
   if (isLoading) {
-    return (
-      <PublicLayout>
-        <div className='mx-auto flex max-w-4xl flex-col gap-4 py-12'>
-          <Skeleton className='h-8 w-[45%]' />
-          <Skeleton className='h-4 w-full' />
-          <Skeleton className='h-4 w-[90%]' />
-          <Skeleton className='h-4 w-[80%]' />
-        </div>
-      </PublicLayout>
+    content = (
+      <div className='mx-auto flex max-w-4xl flex-col gap-4 py-12'>
+        <Skeleton className='h-8 w-[45%]' />
+        <Skeleton className='h-4 w-full' />
+        <Skeleton className='h-4 w-[90%]' />
+        <Skeleton className='h-4 w-[80%]' />
+      </div>
     )
-  }
-
-  if (!hasContent) {
-    return (
-      <PublicLayout>
-        <EmptyAboutState />
-      </PublicLayout>
+  } else if (!hasContent) {
+    content = <EmptyAboutState />
+  } else if (isUrl) {
+    content = (
+      <iframe
+        src={rawContent}
+        className='h-[calc(100vh-3.5rem)] w-full border-0'
+        title={t('About')}
+        sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts'
+      />
     )
-  }
-
-  if (isUrl) {
-    return (
-      <PublicLayout showMainContainer={false}>
-        <iframe
-          src={rawContent}
-          className='h-[calc(100vh-3.5rem)] w-full border-0'
-          title={t('About')}
-          sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts'
-        />
-      </PublicLayout>
+  } else if (contentIsHtml) {
+    content = (
+      <RichContent
+        mode='html'
+        htmlVariant='isolated'
+        content={rawContent}
+        className='prose-neutral dark:prose-invert max-w-none'
+      />
     )
-  }
-
-  if (contentIsHtml) {
-    return (
-      <PublicLayout showMainContainer={false}>
-        <RichContent
-          mode='html'
-          htmlVariant='isolated'
-          content={rawContent}
-          className='prose-neutral dark:prose-invert max-w-none'
-        />
-      </PublicLayout>
-    )
-  }
-
-  return (
-    <PublicLayout>
+  } else {
+    content = (
       <div className='mx-auto max-w-6xl px-4 py-8'>
         <RichContent
           mode='markdown'
@@ -180,6 +190,13 @@ export function About() {
           className='prose-neutral dark:prose-invert max-w-none'
         />
       </div>
+    )
+  }
+
+  return (
+    <PublicLayout showMainContainer={!isUrl && !contentIsHtml}>
+      {content}
+      <ProjectAttribution />
     </PublicLayout>
   )
 }
