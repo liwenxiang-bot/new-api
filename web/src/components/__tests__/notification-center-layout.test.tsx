@@ -45,11 +45,14 @@ describe('NotificationPopover layout', () => {
       name: 'Message Center',
     })
     const tabs = screen.getAllByRole('tab')
+    const tabList = screen.getByRole('tablist')
     const scrollArea = dialog.querySelector('[data-slot="scroll-area"]')
 
+    expect(tabList).toHaveClass('h-10', 'rounded-full', 'p-1')
     expect(tabs[0]).toHaveTextContent('System Announcements')
     expect(tabs[1]).toHaveTextContent('Notifications')
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
+    expect(tabs[0]).toHaveClass('h-full', 'py-0', 'leading-none')
     expect(dialog).toHaveClass(
       'h-[calc(100vh-2rem)]',
       'w-[calc(100vw-2rem)]',

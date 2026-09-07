@@ -331,20 +331,23 @@ export function NotificationPopover({
           onValueChange={onTabChange as (value: string) => void}
           className='min-h-0 flex-1 gap-0'
         >
-          <div className='flex shrink-0 flex-col gap-4 border-b px-6 py-5 pr-14 sm:flex-row sm:items-center sm:justify-between'>
-            <DialogTitle className='text-2xl font-semibold tracking-tight'>
+          <div className='flex shrink-0 flex-col gap-3 border-b px-6 py-4 pr-14 sm:flex-row sm:items-center sm:justify-between'>
+            <DialogTitle className='text-xl font-semibold tracking-tight'>
               {t('Message Center')}
             </DialogTitle>
 
-            <TabsList className='grid h-11 w-full grid-cols-2 rounded-full p-1 sm:max-w-[26rem]'>
+            <TabsList className='grid h-10 w-full grid-cols-2 rounded-full p-1 sm:max-w-[26rem]'>
               <TabsTrigger
                 value='announcements'
-                className='gap-1.5 rounded-full'
+                className='h-full gap-1.5 rounded-full py-0 text-sm leading-none'
               >
                 <Megaphone className='size-3.5' />
                 {t('System Announcements')}
               </TabsTrigger>
-              <TabsTrigger value='notice' className='gap-1.5 rounded-full'>
+              <TabsTrigger
+                value='notice'
+                className='h-full gap-1.5 rounded-full py-0 text-sm leading-none'
+              >
                 <Bell className='size-3.5' />
                 {t('Notifications')}
               </TabsTrigger>
