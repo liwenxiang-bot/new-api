@@ -24,21 +24,19 @@ import { RichContent } from '@/components/rich-content'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import {
-  Popover,
-  PopoverContent,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getAnnouncementColorClass } from '@/lib/colors'
 import { formatDateTimeObject } from '@/lib/time'
@@ -130,7 +128,7 @@ function AnnouncementDot({ type }: { type?: string }) {
   return (
     <span
       className={cn(
-        'mt-1.5 inline-block size-2 shrink-0 rounded-full',
+        'absolute top-1.5 left-0 inline-block size-2 rounded-full',
         getAnnouncementColorClass(type)
       )}
     />
@@ -204,8 +202,8 @@ function NoticeContent({
   }
 
   return (
-    <ScrollArea className='h-[min(52vh,28rem)] pr-3'>
-      <RichContent breaks content={notice} />
+    <ScrollArea className='h-full pr-3'>
+      <RichContent breaks content={notice} className='prose-base' />
     </ScrollArea>
   )
 }
@@ -239,9 +237,9 @@ function AnnouncementsContent({
   }
 
   return (
-    <ScrollArea className='h-[min(52vh,28rem)] pr-3'>
-      <div className='flex flex-col'>
-        {announcements.map((item, idx) => {
+    <ScrollArea className='h-full pr-3'>
+      <div className='relative flex flex-col'>
+        {announcements.map((item) => {
           const announcementKey = getAnnouncementRenderKey(item)
           const publishDate = item.publishDate
             ? new Date(item.publishDate)
@@ -254,31 +252,29 @@ function AnnouncementsContent({
             : ''
 
           return (
-            <div key={announcementKey}>
-              <div className='py-3'>
-                <div className='flex items-start gap-3'>
-                  <AnnouncementDot type={item.type} />
-                  <div className='flex min-w-0 flex-1 flex-col gap-2'>
-                    <div className='text-sm'>
-                      <RichContent breaks content={item.content || ''} />
-                    </div>
-
-                    {item.extra ? (
-                      <div className='text-muted-foreground text-xs'>
-                        <RichContent breaks content={item.extra} />
-                      </div>
-                    ) : null}
-
-                    {absoluteTime ? (
-                      <div className='text-muted-foreground text-xs'>
-                        {relativeTime ? `${relativeTime} • ` : null}
-                        {absoluteTime}
-                      </div>
-                    ) : null}
-                  </div>
+            <div
+              key={announcementKey}
+              className='before:bg-border relative pb-8 pl-8 before:absolute before:top-3 before:bottom-0 before:left-[3px] before:w-px last:pb-2 last:before:hidden'
+            >
+              <AnnouncementDot type={item.type} />
+              <div className='flex min-w-0 flex-col gap-2'>
+                <div className='text-base leading-7'>
+                  <RichContent breaks content={item.content || ''} />
                 </div>
+
+                {item.extra ? (
+                  <div className='text-muted-foreground text-sm'>
+                    <RichContent breaks content={item.extra} />
+                  </div>
+                ) : null}
+
+                {absoluteTime ? (
+                  <div className='text-muted-foreground text-sm'>
+                    {relativeTime ? `${relativeTime} • ` : null}
+                    {absoluteTime}
+                  </div>
+                ) : null}
               </div>
-              {idx < announcements.length - 1 ? <Separator /> : null}
             </div>
           )
         })}
@@ -288,7 +284,7 @@ function AnnouncementsContent({
 }
 
 /**
- * Notification popover with Notice and Announcements tabs
+ * Notification center with Notice and Announcements tabs
  */
 export function NotificationPopover({
   open,
@@ -303,8 +299,8 @@ export function NotificationPopover({
 }: NotificationPopoverProps) {
   const { t } = useTranslation()
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger
         render={
           <Button
             variant='ghost'
@@ -323,54 +319,63 @@ export function NotificationPopover({
             {unreadCount > 99 ? '99+' : unreadCount}
           </Badge>
         ) : null}
-      </PopoverTrigger>
+      </DialogTrigger>
 
-      <PopoverContent
-        align='end'
-        sideOffset={8}
-        className='w-[min(26rem,calc(100vw-1rem))] gap-3 p-3'
+      <DialogContent
+        showCloseButton
+        overlayClassName='bg-black/45 backdrop-blur-[2px]'
+        className='flex h-[min(88vh,52rem)] w-[min(90vw,72rem)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-none'
       >
-        <PopoverHeader className='gap-1 px-1'>
-          <PopoverTitle>{t('System Announcements')}</PopoverTitle>
-          <p className='text-muted-foreground text-xs'>
-            {t('Latest platform updates and notices')}
-          </p>
-        </PopoverHeader>
-
         <Tabs
           value={activeTab}
           onValueChange={onTabChange as (value: string) => void}
+          className='min-h-0 flex-1 gap-0'
         >
-          <TabsList className='grid w-full grid-cols-2'>
-            <TabsTrigger value='notice' className='gap-1.5'>
-              <Bell className='size-3.5' />
-              {t('Notice')}
-            </TabsTrigger>
-            <TabsTrigger value='announcements' className='gap-1.5'>
-              <Megaphone className='size-3.5' />
-              {t('Timeline')}
-            </TabsTrigger>
-          </TabsList>
+          <div className='flex shrink-0 flex-col gap-4 border-b px-6 py-5 pr-14 sm:flex-row sm:items-center sm:justify-between'>
+            <DialogTitle className='text-2xl font-semibold tracking-tight'>
+              {t('System Announcements')}
+            </DialogTitle>
 
-          <TabsContent value='notice' className='mt-2'>
-            <NoticeContent notice={notice} loading={loading} t={t} />
-          </TabsContent>
+            <TabsList className='grid h-11 w-full grid-cols-2 rounded-full p-1 sm:max-w-[26rem]'>
+              <TabsTrigger value='notice' className='gap-1.5 rounded-full'>
+                <Bell className='size-3.5' />
+                {t('Notice')}
+              </TabsTrigger>
+              <TabsTrigger
+                value='announcements'
+                className='gap-1.5 rounded-full'
+              >
+                <Megaphone className='size-3.5' />
+                {t('Timeline')}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <TabsContent value='announcements' className='mt-2'>
-            <AnnouncementsContent
-              announcements={announcements}
-              loading={loading}
-              t={t}
-            />
-          </TabsContent>
+          <div className='min-h-0 flex-1 px-6 py-5'>
+            <TabsContent value='notice' className='mt-0 h-full'>
+              <NoticeContent notice={notice} loading={loading} t={t} />
+            </TabsContent>
+
+            <TabsContent value='announcements' className='mt-0 h-full'>
+              <AnnouncementsContent
+                announcements={announcements}
+                loading={loading}
+                t={t}
+              />
+            </TabsContent>
+          </div>
         </Tabs>
 
-        <div className='flex justify-end'>
-          <Button size='sm' onClick={() => onOpenChange(false)}>
+        <div className='flex shrink-0 justify-end border-t px-6 py-4'>
+          <Button
+            size='sm'
+            variant='secondary'
+            onClick={() => onOpenChange(false)}
+          >
             {t('Close')}
           </Button>
         </div>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   )
 }
