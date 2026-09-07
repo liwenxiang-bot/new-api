@@ -42,8 +42,8 @@ describe('NotificationPopover layout', () => {
     const scrollArea = dialog.querySelector('[data-slot="scroll-area"]')
 
     expect(dialog).toHaveClass(
-      'h-[min(88vh,52rem)]',
-      'w-[min(90vw,72rem)]',
+      'h-[min(80vh,54rem)]',
+      'w-[min(80vw,78rem)]',
       'max-w-none',
       'overflow-hidden'
     )

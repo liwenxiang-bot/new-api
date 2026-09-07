@@ -324,7 +324,7 @@ export function NotificationPopover({
       <DialogContent
         showCloseButton
         overlayClassName='bg-black/45 backdrop-blur-[2px]'
-        className='flex h-[min(88vh,52rem)] w-[min(90vw,72rem)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-none'
+        className='flex h-[min(80vh,54rem)] w-[min(80vw,78rem)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-none'
       >
         <Tabs
           value={activeTab}
