@@ -333,20 +333,20 @@ export function NotificationPopover({
         >
           <div className='flex shrink-0 flex-col gap-4 border-b px-6 py-5 pr-14 sm:flex-row sm:items-center sm:justify-between'>
             <DialogTitle className='text-2xl font-semibold tracking-tight'>
-              {t('System Announcements')}
+              {t('Message Center')}
             </DialogTitle>
 
             <TabsList className='grid h-11 w-full grid-cols-2 rounded-full p-1 sm:max-w-[26rem]'>
-              <TabsTrigger value='notice' className='gap-1.5 rounded-full'>
-                <Bell className='size-3.5' />
-                {t('Notice')}
-              </TabsTrigger>
               <TabsTrigger
                 value='announcements'
                 className='gap-1.5 rounded-full'
               >
                 <Megaphone className='size-3.5' />
-                {t('Timeline')}
+                {t('System Announcements')}
+              </TabsTrigger>
+              <TabsTrigger value='notice' className='gap-1.5 rounded-full'>
+                <Bell className='size-3.5' />
+                {t('Notifications')}
               </TabsTrigger>
             </TabsList>
           </div>

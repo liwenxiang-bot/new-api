@@ -28,19 +28,28 @@ describe('NotificationPopover layout', () => {
         open
         onOpenChange={() => undefined}
         unreadCount={2}
-        activeTab='notice'
+        activeTab='announcements'
         onTabChange={() => undefined}
-        notice={'# Platform update\n\nA longer announcement body.'}
-        announcements={[]}
+        notice='A platform notice.'
+        announcements={[
+          {
+            content: '# System announcement\n\nA longer announcement body.',
+            publishDate: '2026-09-07T00:00:00Z',
+          },
+        ]}
         loading={false}
       />
     )
 
     const dialog = screen.getByRole('dialog', {
-      name: 'System Announcements',
+      name: 'Message Center',
     })
+    const tabs = screen.getAllByRole('tab')
     const scrollArea = dialog.querySelector('[data-slot="scroll-area"]')
 
+    expect(tabs[0]).toHaveTextContent('System Announcements')
+    expect(tabs[1]).toHaveTextContent('Notifications')
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
     expect(dialog).toHaveClass(
       'h-[min(80vh,54rem)]',
       'w-[min(80vw,78rem)]',
