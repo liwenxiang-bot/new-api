@@ -51,10 +51,14 @@ describe('NotificationPopover layout', () => {
     expect(tabs[1]).toHaveTextContent('Notifications')
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
     expect(dialog).toHaveClass(
-      'h-[min(80vh,54rem)]',
-      'w-[min(80vw,78rem)]',
+      'h-[calc(100vh-2rem)]',
+      'w-[calc(100vw-2rem)]',
       'max-w-none',
       'overflow-hidden'
+    )
+    expect(dialog).toHaveClass(
+      'sm:h-[min(76vh,40rem)]',
+      'sm:w-[min(62vw,58rem)]'
     )
     expect(document.querySelector('[data-slot="dialog-overlay"]')).toHaveClass(
       'bg-black/45',
