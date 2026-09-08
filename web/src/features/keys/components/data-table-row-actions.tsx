@@ -190,7 +190,36 @@ export function DataTableRowActions<TData>({
   }
 
   return (
-    <div className='-ml-1.5 flex items-center gap-1'>
+    <div className='-ml-1.5 flex shrink-0 items-center gap-1'>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant='outline'
+              size='sm'
+              className='mr-1'
+              disabled={isRealKeyLoading}
+              aria-busy={isRealKeyLoading}
+              onClick={async () => {
+                const realKey = await resolveRealKey(apiKey.id)
+                if (!realKey) return
+                setResolvedKey(realKey)
+                setCurrentRow(apiKey)
+                setOpen('cc-switch')
+              }}
+            />
+          }
+        >
+          {isRealKeyLoading ? (
+            <Loader2 className='size-3.5 animate-spin' aria-hidden='true' />
+          ) : (
+            <ArrowRightLeft className='size-3.5' aria-hidden='true' />
+          )}
+          {t('CC Switch')}
+        </TooltipTrigger>
+        <TooltipContent>{t('Import to CC Switch')}</TooltipContent>
+      </Tooltip>
+
       <Tooltip>
         <TooltipTrigger
           render={
@@ -268,40 +297,28 @@ export function DataTableRowActions<TData>({
             <Link size={16} />
           </DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={async () => {
-            const realKey = await resolveRealKey(apiKey.id)
-            if (!realKey) return
-            setResolvedKey(realKey)
-            setCurrentRow(apiKey)
-            setOpen('cc-switch')
-          }}
-        >
-          {t('CC Switch')}
-          <DropdownMenuShortcut>
-            <ArrowRightLeft size={16} />
-          </DropdownMenuShortcut>
-        </DropdownMenuItem>
         {hasChatPresets && (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>{t('Chat')}</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {chatPresets.map((preset) => (
-                <DropdownMenuItem
-                  key={preset.id}
-                  onClick={() => handleOpenChatPreset(preset)}
-                >
-                  {preset.name}
-                  {preset.type !== 'web' && (
-                    <DropdownMenuShortcut>
-                      <ExternalLink size={16} />
-                    </DropdownMenuShortcut>
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>{t('Chat')}</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {chatPresets.map((preset) => (
+                  <DropdownMenuItem
+                    key={preset.id}
+                    onClick={() => handleOpenChatPreset(preset)}
+                  >
+                    {preset.name}
+                    {preset.type !== 'web' && (
+                      <DropdownMenuShortcut>
+                        <ExternalLink size={16} />
+                      </DropdownMenuShortcut>
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
