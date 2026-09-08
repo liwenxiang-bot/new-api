@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
-import { Bell, Megaphone } from 'lucide-react'
+import { Bell, Megaphone, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { RichContent } from '@/components/rich-content'
@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogTitle,
   DialogTrigger,
@@ -322,39 +323,57 @@ export function NotificationPopover({
       </DialogTrigger>
 
       <DialogContent
-        showCloseButton
-        overlayClassName='bg-black/45 backdrop-blur-[2px]'
-        className='flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:h-[min(76vh,40rem)] sm:w-[min(62vw,58rem)] sm:max-w-none'
+        showCloseButton={false}
+        overlayClassName='bg-black/45 supports-backdrop-filter:backdrop-blur-none'
+        className='flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-none flex-col gap-0 overflow-hidden rounded-lg p-0 shadow-xl sm:h-[min(76dvh,40rem)] sm:w-[min(90vw,58rem)] sm:max-w-none lg:w-[min(62vw,58rem)]'
       >
         <Tabs
           value={activeTab}
           onValueChange={onTabChange as (value: string) => void}
           className='min-h-0 flex-1 gap-0'
         >
-          <div className='flex shrink-0 flex-col gap-3 border-b px-6 py-4 pr-14 sm:flex-row sm:items-center sm:justify-between'>
-            <DialogTitle className='text-xl font-semibold tracking-tight'>
+          <div className='grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-4 px-6 py-6 md:grid-cols-[minmax(0,1fr)_auto_auto]'>
+            <DialogTitle className='text-lg font-semibold tracking-tight'>
               {t('Message Center')}
             </DialogTitle>
 
-            <TabsList className='grid h-10 w-full grid-cols-2 rounded-full p-1 sm:max-w-[26rem]'>
+            <TabsList className='col-span-2 row-start-2 w-fit max-w-full gap-1 rounded-full p-1 group-data-horizontal/tabs:h-auto md:col-span-1 md:col-start-2 md:row-start-1'>
               <TabsTrigger
                 value='announcements'
-                className='h-full gap-1.5 rounded-full py-0 text-sm leading-none'
+                className='min-h-8 min-w-0 flex-initial gap-2 rounded-full px-4 py-1 text-sm leading-5 whitespace-normal'
               >
-                <Megaphone className='size-3.5' />
                 {t('System Announcements')}
+                {!loading && announcements.length > 0 ? (
+                  <Badge
+                    variant='secondary'
+                    className={cn(
+                      'h-4.5 min-w-6 px-1.5 tabular-nums',
+                      activeTab === 'announcements' &&
+                        'bg-primary/10 text-primary'
+                    )}
+                  >
+                    {announcements.length}
+                  </Badge>
+                ) : null}
               </TabsTrigger>
               <TabsTrigger
                 value='notice'
-                className='h-full gap-1.5 rounded-full py-0 text-sm leading-none'
+                className='min-h-8 min-w-0 flex-initial rounded-full px-4 py-1 text-sm leading-5 whitespace-normal'
               >
-                <Bell className='size-3.5' />
                 {t('Notifications')}
               </TabsTrigger>
             </TabsList>
+
+            <DialogClose
+              className='col-start-2 row-start-1 md:col-start-3'
+              render={<Button variant='ghost' size='icon' />}
+              aria-label={t('Close')}
+            >
+              <X className='size-5' aria-hidden='true' />
+            </DialogClose>
           </div>
 
-          <div className='min-h-0 flex-1 px-6 py-5'>
+          <div className='min-h-0 flex-1 px-6 pt-2 pb-4'>
             <TabsContent value='notice' className='mt-0 h-full'>
               <NoticeContent notice={notice} loading={loading} t={t} />
             </TabsContent>
@@ -369,10 +388,10 @@ export function NotificationPopover({
           </div>
         </Tabs>
 
-        <div className='flex shrink-0 justify-end border-t px-6 py-4'>
+        <div className='flex shrink-0 justify-end px-6 pt-2 pb-6'>
           <Button
-            size='sm'
             variant='secondary'
+            className='h-9 px-4'
             onClick={() => onOpenChange(false)}
           >
             {t('Close')}

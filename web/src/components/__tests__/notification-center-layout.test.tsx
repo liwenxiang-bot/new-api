@@ -48,24 +48,25 @@ describe('NotificationPopover layout', () => {
     const tabList = screen.getByRole('tablist')
     const scrollArea = dialog.querySelector('[data-slot="scroll-area"]')
 
-    expect(tabList).toHaveClass('h-10', 'rounded-full', 'p-1')
+    expect(tabList).toHaveClass('w-fit', 'max-w-full', 'rounded-full', 'p-1')
     expect(tabs[0]).toHaveTextContent('System Announcements')
     expect(tabs[1]).toHaveTextContent('Notifications')
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
-    expect(tabs[0]).toHaveClass('h-full', 'py-0', 'leading-none')
+    expect(tabs[0]).toHaveClass('min-h-8', 'flex-initial', 'whitespace-normal')
     expect(dialog).toHaveClass(
-      'h-[calc(100vh-2rem)]',
+      'h-[calc(100dvh-2rem)]',
       'w-[calc(100vw-2rem)]',
       'max-w-none',
       'overflow-hidden'
     )
     expect(dialog).toHaveClass(
-      'sm:h-[min(76vh,40rem)]',
-      'sm:w-[min(62vw,58rem)]'
+      'sm:h-[min(76dvh,40rem)]',
+      'sm:w-[min(90vw,58rem)]',
+      'lg:w-[min(62vw,58rem)]'
     )
     expect(document.querySelector('[data-slot="dialog-overlay"]')).toHaveClass(
       'bg-black/45',
-      'backdrop-blur-[2px]'
+      'supports-backdrop-filter:backdrop-blur-none'
     )
     expect(scrollArea).toHaveClass('h-full')
     expect(
