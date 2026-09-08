@@ -27,9 +27,6 @@ import { ComboboxInput } from '@/components/ui/combobox-input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { getUserModels } from '@/lib/api'
-import { useAuthStore } from '@/stores/auth-store'
-
-import type { ApiKey } from '../../types'
 
 const APP_CONFIGS = {
   claude: {
@@ -76,7 +73,7 @@ function buildCCSwitchURL(
   apiKey: string
 ): string {
   const serverAddress = getServerAddress()
-  const endpoint = app === 'codex' ? `${serverAddress}/v1` : serverAddress
+  const endpoint = app === 'codex' ? serverAddress + '/v1' : serverAddress
   const params = new URLSearchParams()
   params.set('resource', 'provider')
   params.set('app', app)
@@ -95,60 +92,25 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   tokenKey: string
-  apiKey: Pick<ApiKey, 'id' | 'group' | 'auto_groups'> | null
 }
 
 export function CCSwitchDialog(props: Props) {
   const { t } = useTranslation()
-  const user = useAuthStore((state) => state.auth.user)
   const [app, setApp] = useState<AppType>('claude')
   const [name, setName] = useState<string>(APP_CONFIGS.claude.defaultName)
   const [models, setModels] = useState<Record<string, string>>({})
 
-  const modelGroups = useMemo(() => {
-    if (!props.apiKey) return []
-    const group = props.apiKey.group || user?.group
-    if (!group) return []
-    if (group === 'auto' && props.apiKey.auto_groups?.length) {
-      return [...new Set(props.apiKey.auto_groups)]
-    }
-    return [group]
-  }, [props.apiKey, user?.group])
-
-  const modelsQuery = useQuery({
-    queryKey: ['user-models-ccswitch', user?.id, user?.group, modelGroups],
-    queryFn: async () => {
-      const responses = await Promise.all(modelGroups.map(getUserModels))
-      const items = responses.flatMap((response) => {
-        if (!response.success) {
-          throw new Error(response.message || t('Loading failed'))
-        }
-        return response.data ?? []
-      })
-      return [...new Set(items)]
-    },
-    enabled: props.open && modelGroups.length > 0,
+  const { data: modelsData } = useQuery({
+    queryKey: ['user-models-ccswitch'],
+    queryFn: getUserModels,
+    enabled: props.open,
     staleTime: 5 * 60 * 1000,
   })
 
   const modelOptions = useMemo(() => {
-    const items = modelsQuery.isError ? [] : (modelsQuery.data ?? [])
+    const items = modelsData?.data ?? []
     return items.map((m) => ({ value: m, label: m }))
-  }, [modelsQuery.data, modelsQuery.isError])
-
-  const selectedModels = Object.fromEntries(
-    Object.entries(models).filter(([, value]) =>
-      modelOptions.some((option) => option.value === value)
-    )
-  )
-  let modelStatus = ''
-  if (modelsQuery.isError) {
-    modelStatus = t('Loading failed')
-  } else if (modelsQuery.isPending && modelsQuery.isFetching) {
-    modelStatus = t('Loading...')
-  } else if (modelOptions.length === 0) {
-    modelStatus = t('No models found')
-  }
+  }, [modelsData?.data])
 
   useEffect(() => {
     if (props.open) {
@@ -159,7 +121,7 @@ export function CCSwitchDialog(props: Props) {
 
       setName(APP_CONFIGS.claude.defaultName)
     }
-  }, [props.open, props.apiKey?.id, modelGroups])
+  }, [props.open])
 
   const currentConfig = APP_CONFIGS[app]
 
@@ -171,14 +133,14 @@ export function CCSwitchDialog(props: Props) {
   }
 
   const handleSubmit = () => {
-    if (!selectedModels.model) {
+    if (!models.model) {
       toast.warning(t('Please select a primary model'))
       return
     }
     const key = props.tokenKey.startsWith('sk-')
       ? props.tokenKey
       : `sk-${props.tokenKey}`
-    const url = buildCCSwitchURL(app, name, selectedModels, key)
+    const url = buildCCSwitchURL(app, name, models, key)
     window.open(url, '_blank')
     props.onOpenChange(false)
   }
@@ -198,9 +160,7 @@ export function CCSwitchDialog(props: Props) {
           <Button variant='outline' onClick={() => props.onOpenChange(false)}>
             {t('Cancel')}
           </Button>
-          <Button onClick={handleSubmit} disabled={!selectedModels.model}>
-            {t('Open CC Switch')}
-          </Button>
+          <Button onClick={handleSubmit}>{t('Open CC Switch')}</Button>
         </>
       }
     >
@@ -229,30 +189,28 @@ export function CCSwitchDialog(props: Props) {
         </div>
 
         <div className='space-y-2'>
-          <Label htmlFor='cc-switch-name'>{t('Name')}</Label>
+          <Label>{t('Name')}</Label>
           <ComboboxInput
-            id='cc-switch-name'
             options={[]}
             value={name}
             onValueChange={setName}
             placeholder={currentConfig.defaultName}
             emptyText=''
-            allowCustomValue
+            allowCustomValue={true}
           />
         </div>
 
         {currentConfig.modelFields.map((field) => (
           <div key={field.key} className='space-y-2'>
-            <Label htmlFor={`cc-switch-${field.key}`}>
+            <Label>
               {t(field.labelKey)}
               {field.required && (
                 <span className='text-destructive ml-0.5'>*</span>
               )}
             </Label>
             <ComboboxInput
-              id={`cc-switch-${field.key}`}
               options={modelOptions}
-              value={selectedModels[field.key] || ''}
+              value={models[field.key] || ''}
               onValueChange={(v) =>
                 setModels((prev) => ({ ...prev, [field.key]: v }))
               }
@@ -261,11 +219,6 @@ export function CCSwitchDialog(props: Props) {
             />
           </div>
         ))}
-        {modelStatus && (
-          <p role='status' className='text-muted-foreground text-sm'>
-            {modelStatus}
-          </p>
-        )}
       </div>
     </Dialog>
   )
