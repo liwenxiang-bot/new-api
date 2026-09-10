@@ -16,22 +16,45 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useState } from 'react'
+
+import type { ApiKeyCreationPreset } from '../types'
 import { ApiKeysDeleteDialog } from './api-keys-delete-dialog'
 import { ApiKeysMutateDrawer } from './api-keys-mutate-drawer'
 import { useApiKeys } from './api-keys-provider'
+import { ApiKeyCreationGuideDialog } from './dialogs/api-key-creation-guide-dialog'
 import { CCSwitchDialog } from './dialogs/cc-switch-dialog'
 
 export function ApiKeysDialogs() {
   const { open, setOpen, currentRow, resolvedKey } = useApiKeys()
+  const [creationPreset, setCreationPreset] = useState<
+    ApiKeyCreationPreset | undefined
+  >()
 
   return (
     <>
       <ApiKeysMutateDrawer
         open={open === 'create' || open === 'update'}
-        onOpenChange={(isOpen) => !isOpen && setOpen(null)}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setCreationPreset(undefined)
+            setOpen(null)
+          }
+        }}
         currentRow={open === 'update' ? currentRow || undefined : undefined}
+        creationPreset={open === 'create' ? creationPreset : undefined}
       />
       <ApiKeysDeleteDialog />
+      {open === 'create-guide' && (
+        <ApiKeyCreationGuideDialog
+          open
+          onOpenChange={(isOpen) => !isOpen && setOpen(null)}
+          onCreate={(preset) => {
+            setCreationPreset(preset)
+            setOpen('create')
+          }}
+        />
+      )}
       <CCSwitchDialog
         open={open === 'cc-switch'}
         onOpenChange={(isOpen) => !isOpen && setOpen(null)}

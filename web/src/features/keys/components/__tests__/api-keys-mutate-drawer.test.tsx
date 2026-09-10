@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, test } from 'vitest'
 
+import type { ApiKeyCreationPreset } from '../../types'
+
 const { createInstance } = await import('i18next')
 const { I18nextProvider, initReactI18next } = await import('react-i18next')
 const { QueryClient, QueryClientProvider } =
@@ -41,13 +43,23 @@ type MockableApi = {
 type RenderedDrawer = {
   queryClient: InstanceType<typeof QueryClient>
 }
+type UserGroups = Record<string, { desc: string; ratio: number | string }>
+
+const DEFAULT_GROUPS: UserGroups = {
+  auto: { desc: 'Automatic routing', ratio: 'auto' },
+  default: { desc: 'Standard access', ratio: 1 },
+  vip: { desc: 'Priority access', ratio: 2 },
+}
 
 const apiClient = api as unknown as MockableApi
 const originalGet = apiClient.get
 const originalPost = apiClient.post
 let renderedDrawer: RenderedDrawer | null = null
 
-function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
+function installApiFixtures(
+  createdPayloads: Array<Record<string, unknown>>,
+  groups = DEFAULT_GROUPS
+) {
   apiClient.get = async (url) => {
     switch (url) {
       case '/api/status':
@@ -58,11 +70,7 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
         return {
           data: {
             success: true,
-            data: {
-              auto: { desc: 'Automatic routing', ratio: 'auto' },
-              default: { desc: 'Standard access', ratio: 1 },
-              vip: { desc: 'Priority access', ratio: 2 },
-            },
+            data: groups,
           },
         }
       case '/api/token/auto-groups':
@@ -84,7 +92,12 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
   }
 }
 
-async function renderCreateDrawer(): Promise<void> {
+async function renderCreateDrawer(
+  options: {
+    creationPreset?: ApiKeyCreationPreset
+    groups?: UserGroups
+  } = {}
+): Promise<void> {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -103,11 +116,7 @@ async function renderCreateDrawer(): Promise<void> {
     ['user-groups'],
     {
       success: true,
-      data: {
-        auto: { desc: 'Automatic routing', ratio: 'auto' },
-        default: { desc: 'Standard access', ratio: 1 },
-        vip: { desc: 'Priority access', ratio: 2 },
-      },
+      data: options.groups ?? DEFAULT_GROUPS,
     },
     { updatedAt: freshAt }
   )
@@ -125,15 +134,21 @@ async function renderCreateDrawer(): Promise<void> {
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
         <ApiKeysProvider>
-          <ApiKeysMutateDrawer open onOpenChange={() => undefined} />
+          <ApiKeysMutateDrawer
+            open
+            onOpenChange={() => undefined}
+            creationPreset={options.creationPreset}
+          />
         </ApiKeysProvider>
       </I18nextProvider>
     </QueryClientProvider>
   )
   await waitFor(
     () => {
-      const saveButton = findButton('Save changes', false)
-      expect(saveButton).toBeEnabled()
+      expect(getControlByLabel('Name').closest('form')).toHaveAttribute(
+        'aria-busy',
+        'false'
+      )
     },
     { timeout: 1500 }
   )
@@ -276,5 +291,59 @@ describe('API keys mutate drawer Auto group integration', () => {
     fireEvent.click(findButton('Save changes', true))
     await waitFor(() => expect(createdPayloads).toHaveLength(1))
     expect(createdPayloads[0]?.auto_groups).toEqual(['vip'])
+  })
+})
+
+describe('API keys mutate drawer creation presets', () => {
+  test.each([
+    { name: 'claude-code', group: 'cc-max' },
+    { name: 'codex', group: 'codex' },
+  ])(
+    'prefills the $group preset and submits that group when the user saves',
+    async (creationPreset) => {
+      const createdPayloads: Array<Record<string, unknown>> = []
+      const groups = {
+        ...DEFAULT_GROUPS,
+        'cc-max': { desc: 'Claude Code access', ratio: 2 },
+        codex: { desc: 'Codex access', ratio: 0.3 },
+      }
+      installApiFixtures(createdPayloads, groups)
+      await renderCreateDrawer({ creationPreset, groups })
+
+      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue(
+        creationPreset.name
+      )
+      expect(getControlByLabel('Group')).toHaveTextContent(creationPreset.group)
+      expect(createdPayloads).toEqual([])
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+      await waitFor(() => expect(createdPayloads).toHaveLength(1))
+      expect(createdPayloads[0]).toMatchObject({
+        ...creationPreset,
+        auto_groups: [],
+        cross_group_retry: false,
+      })
+    }
+  )
+
+  test('keeps an unavailable preset from falling back and blocks creation', async () => {
+    const createdPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures(createdPayloads)
+    await renderCreateDrawer({
+      creationPreset: { name: 'claude-code', group: 'cc-max' },
+    })
+
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue(
+      'claude-code'
+    )
+    expect(getControlByLabel('Group')).toHaveTextContent('Select a group')
+    expect(
+      screen.getByText('The cc-max group is not available for this account.')
+    ).toBeVisible()
+    const saveButton = screen.getByRole('button', { name: 'Save changes' })
+    expect(saveButton).toBeDisabled()
+
+    fireEvent.click(saveButton)
+    expect(createdPayloads).toEqual([])
   })
 })

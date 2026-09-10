@@ -96,6 +96,8 @@ export interface ApiKeyFormData {
   cross_group_retry: boolean
 }
 
+export type ApiKeyCreationPreset = Pick<ApiKeyFormData, 'name' | 'group'>
+
 export interface TokenAutoGroupsConfig {
   groups: string[]
   max_count: number
@@ -107,6 +109,7 @@ export interface TokenAutoGroupsConfig {
 
 export type ApiKeysDialogType =
   | 'create'
+  | 'create-guide'
   | 'update'
   | 'delete'
   | 'batch-delete'

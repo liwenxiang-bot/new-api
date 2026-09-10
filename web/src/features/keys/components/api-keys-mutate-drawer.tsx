@@ -81,7 +81,7 @@ import {
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
-import type { ApiKey } from '../types'
+import type { ApiKey, ApiKeyCreationPreset } from '../types'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
@@ -93,12 +93,14 @@ type ApiKeyMutateDrawerProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   currentRow?: ApiKey
+  creationPreset?: ApiKeyCreationPreset
 }
 
 export function ApiKeysMutateDrawer({
   open,
   onOpenChange,
   currentRow,
+  creationPreset,
 }: ApiKeyMutateDrawerProps) {
   const { t } = useTranslation()
   const isUpdate = !!currentRow
@@ -229,9 +231,10 @@ export function ApiKeysMutateDrawer({
         setInitializedTarget(target)
       }
     } else {
-      form.reset(
-        getApiKeyFormDefaultValues(defaultUseAutoGroup && backendHasAuto)
+      const defaults = getApiKeyFormDefaultValues(
+        defaultUseAutoGroup && backendHasAuto
       )
+      form.reset(creationPreset ? { ...defaults, ...creationPreset } : defaults)
       setInitializedTarget(target)
     }
   }, [
@@ -252,6 +255,7 @@ export function ApiKeysMutateDrawer({
     availableAutoGroupNames,
     maxAutoGroups,
     initializedTarget,
+    creationPreset,
   ])
 
   const formTarget =
@@ -263,7 +267,11 @@ export function ApiKeysMutateDrawer({
   useEffect(() => {
     if (groups.length === 0) return
     const currentGroup = selectedGroup
-    if (currentGroup && !groups.some((g) => g.value === currentGroup)) {
+    if (
+      currentGroup &&
+      !groups.some((g) => g.value === currentGroup) &&
+      currentGroup !== creationPreset?.group
+    ) {
       const fallback =
         groups.find((g) => g.value === 'default')?.value ??
         groups[0]?.value ??
@@ -275,9 +283,22 @@ export function ApiKeysMutateDrawer({
         form.setValue('cross_group_retry', false)
       }
     }
-  }, [groups, form, selectedGroup])
+  }, [groups, form, selectedGroup, creationPreset?.group])
 
   const onSubmit = async (data: ApiKeyFormValues) => {
+    const presetGroup = creationPreset?.group
+    if (
+      presetGroup &&
+      presetGroup === data.group &&
+      !groups.some((group) => group.value === presetGroup)
+    ) {
+      form.setError('group', {
+        message: t('The {{group}} group is not available for this account.', {
+          group: presetGroup,
+        }),
+      })
+      return
+    }
     setIsSubmitting(true)
     try {
       const basePayload = transformFormDataToPayload(data)
@@ -359,6 +380,12 @@ export function ApiKeysMutateDrawer({
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const autoGroupsMode = form.watch('auto_groups_mode')
   const unlimitedQuota = form.watch('unlimited_quota')
+  const presetGroupUnavailable =
+    !isUpdate &&
+    creationPreset?.group !== undefined &&
+    creationPreset.group === selectedGroup &&
+    groupsFetched &&
+    !groups.some((group) => group.value === creationPreset.group)
 
   return (
     <Sheet
@@ -437,6 +464,14 @@ export function ApiKeysMutateDrawer({
                         placeholder={t('Select a group')}
                       />
                     </FormControl>
+                    {presetGroupUnavailable && (
+                      <p className='text-destructive text-sm'>
+                        {t(
+                          'The {{group}} group is not available for this account.',
+                          { group: creationPreset?.group }
+                        )}
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -759,7 +794,9 @@ export function ApiKeysMutateDrawer({
           <Button
             type='button'
             onClick={form.handleSubmit(onSubmit, onInvalid)}
-            disabled={!isFormInitialized || isSubmitting}
+            disabled={
+              !isFormInitialized || isSubmitting || presetGroupUnavailable
+            }
             className='w-full sm:w-auto'
           >
             {isSubmitting ? t('Saving...') : t('Save changes')}
