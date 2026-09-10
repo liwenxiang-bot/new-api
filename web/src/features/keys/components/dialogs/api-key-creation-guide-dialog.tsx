@@ -164,7 +164,7 @@ export function ApiKeyCreationGuideDialog(props: Props) {
             <TabsTrigger
               key={item.group}
               value={String(index)}
-              className='min-h-10 gap-2'
+              className='gap-2'
             >
               <span
                 aria-hidden='true'

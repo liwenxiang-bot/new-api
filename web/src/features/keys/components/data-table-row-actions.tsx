@@ -177,9 +177,9 @@ export function DataTableRowActions<TData>({
         <TooltipTrigger
           render={
             <Button
-              variant='outline'
+              variant='secondary'
               size='sm'
-              className='mr-1'
+              className='border-primary/20 bg-primary/5 text-foreground hover:bg-primary/10 mr-1'
               disabled={isRealKeyLoading}
               aria-busy={isRealKeyLoading}
               onClick={async () => {
@@ -193,9 +193,15 @@ export function DataTableRowActions<TData>({
           }
         >
           {isRealKeyLoading ? (
-            <Loader2 className='size-3.5 animate-spin' aria-hidden='true' />
+            <Loader2
+              className='text-primary size-3.5 animate-spin'
+              aria-hidden='true'
+            />
           ) : (
-            <ArrowRightLeft className='size-3.5' aria-hidden='true' />
+            <ArrowRightLeft
+              className='text-primary size-3.5'
+              aria-hidden='true'
+            />
           )}
           {t('CC Switch')}
         </TooltipTrigger>
