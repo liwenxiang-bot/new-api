@@ -14,8 +14,10 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { createInstance } from 'i18next'
+import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import type { UserWalletData } from '../../types'
@@ -45,6 +47,46 @@ afterEach(() => {
 })
 
 describe('affiliate rewards card', () => {
+  test.each([
+    ['zhCN', '12,345'],
+    ['zhTW', '12,345'],
+    ['en', '12,345'],
+    ['fr', '12 345'],
+    ['ru', '12 345'],
+    ['ja', '12,345'],
+    ['vi', '12.345'],
+    ['invalid_locale', '12,345'],
+  ])(
+    'formats invitation counts when the interface switches to %s',
+    async (language, count) => {
+      const i18n = createInstance()
+      await i18n.use(initReactI18next).init({
+        lng: 'en',
+        fallbackLng: 'en',
+        resources: {
+          en: { translation: { 'Qualified Invites': 'Qualified Invites' } },
+          [language]: {
+            translation: { 'Qualified Invites': 'Qualified Invites' },
+          },
+        },
+      })
+      render(
+        <I18nextProvider i18n={i18n}>
+          <AffiliateRewardsCard
+            user={userData({ affiliate_qualified_invites: 12345 })}
+            affiliateLink='https://example.com/register?aff=alice'
+            onTransfer={vi.fn()}
+          />
+        </I18nextProvider>
+      )
+      expect(screen.getByText('12,345')).toBeVisible()
+      await act(async () => {
+        await i18n.changeLanguage(language)
+      })
+      expect(screen.getByText(count)).toBeVisible()
+    }
+  )
+
   test('shows the percentage, threshold, and balance-only policy', () => {
     render(
       <AffiliateRewardsCard
@@ -84,6 +126,40 @@ describe('affiliate rewards card', () => {
     expect(
       screen.getByRole('button', { name: 'Transfer to Balance' })
     ).toBeEnabled()
+    expect(screen.getByRole('textbox', { name: 'Referral link:' })).toHaveValue(
+      'https://example.com/register?aff=alice'
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Transfer to Balance' })
+    )
+    expect(onTransfer).toHaveBeenCalledOnce()
+  })
+
+  test('disables transfer while payment compliance is unconfirmed', () => {
+    render(
+      <AffiliateRewardsCard
+        user={userData()}
+        affiliateLink='https://example.com/register?aff=alice'
+        complianceConfirmed={false}
+        onTransfer={vi.fn()}
+      />
+    )
+    expect(
+      screen.getByRole('button', { name: 'Transfer to Balance' })
+    ).toBeDisabled()
+  })
+
+  test('keeps legacy invitation counts distinct from qualified top-ups', () => {
+    render(
+      <AffiliateRewardsCard
+        user={userData({ affiliate_reward_enabled: false })}
+        affiliateLink='https://example.com/register?aff=alice'
+        onTransfer={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Invited Users')).toBeVisible()
+    expect(screen.queryByText('Qualified Invites')).not.toBeInTheDocument()
+    expect(screen.queryByText('Commission rate')).not.toBeInTheDocument()
   })
 
   test('hides transfer when no rewards are available', () => {

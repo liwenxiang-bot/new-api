@@ -83,7 +83,7 @@ describe('security sidebar visibility', () => {
       result.current
         .find((group) => group.id === 'personal')
         ?.items.map((item) => item.title)
-    ).toEqual(['Wallet', 'Profile', 'Security & Access'])
+    ).toEqual(['Wallet', 'Referral Rewards', 'Profile', 'Security & Access'])
     expect(
       result.current
         .flatMap((group) => group.items)
@@ -179,4 +179,51 @@ describe('audit log sidebar entry', () => {
     expect(titles).not.toContain('Usage Logs')
     expect(titles).toContain('Audit Logs')
   })
+})
+
+describe('referral rewards sidebar entry', () => {
+  it('legacy settings show referral rewards immediately after Wallet', () => {
+    const { result } = sidebarFor(
+      { personal: { enabled: true, topup: true } },
+      { personal: { enabled: true, topup: true } }
+    )
+    const items =
+      result.current.find((group) => group.id === 'personal')?.items ?? []
+    expect(items[1]).toMatchObject({
+      title: 'Referral Rewards',
+      url: '/referrals',
+    })
+  })
+
+  it('the referral visibility setting can be saved independently of the wallet', () => {
+    const config = parseSidebarModulesAdmin(
+      '{"personal":{"enabled":true,"topup":true}}'
+    )
+    expect(config.personal.referrals).toBe(true)
+    config.personal.referrals = false
+    const { result } = sidebarFor(
+      parseSidebarModulesAdmin(serializeSidebarModulesAdmin(config))
+    )
+    const titles = result.current
+      .flatMap((group) => group.items)
+      .map((item) => item.title)
+    expect(titles).not.toContain('Referral Rewards')
+    expect(titles).toContain('Wallet')
+  })
+
+  it.each([
+    [{ personal: { enabled: true, referrals: false } }, undefined],
+    [undefined, { personal: { enabled: true, referrals: false } }],
+    [{ personal: { enabled: false } }, { personal: { referrals: true } }],
+  ])(
+    'admin and user settings can hide referral rewards (%j, %j)',
+    (admin, user) => {
+      const { result } = sidebarFor(admin, user)
+      expect(
+        result.current
+          .flatMap((group) => group.items)
+          .some((item) => item.title === 'Referral Rewards')
+      ).toBe(false)
+    }
+  )
 })

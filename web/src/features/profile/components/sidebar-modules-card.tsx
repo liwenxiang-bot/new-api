@@ -122,6 +122,11 @@ export function SidebarModulesCard() {
           description: t('Balance and top-up management'),
         },
         {
+          key: 'referrals',
+          title: t('Referral Rewards'),
+          description: t('Earn a percentage when referred users top up.'),
+        },
+        {
           key: 'personal',
           title: t('Personal Settings'),
           description: t('Personal info settings'),

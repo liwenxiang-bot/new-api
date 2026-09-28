@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { zodResolver } from '@hookform/resolvers/zod'
 import i18next from 'i18next'
 import type { ChangeEvent } from 'react'
-import type { Resolver } from 'react-hook-form'
+import { useWatch, type Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
@@ -117,6 +117,11 @@ export function QuotaSettingsSection({
         }
       },
     })
+
+  const percentageRewardsEnabled = useWatch({
+    control: form.control,
+    name: 'AffiliateRewardEnabled',
+  })
 
   return (
     <SettingsSection title={t('Quota Settings')}>
@@ -263,7 +268,11 @@ export function QuotaSettingsSection({
               name='QuotaForInvitee'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Invitee First Top-Up Reward')}</FormLabel>
+                  <FormLabel>
+                    {percentageRewardsEnabled
+                      ? t('Invitee First Top-Up Reward')
+                      : t('Invitee Reward')}
+                  </FormLabel>
                   <FormControl>
                     <Input
                       type='number'
@@ -276,7 +285,9 @@ export function QuotaSettingsSection({
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'Quota granted once after an invited user reaches the first top-up threshold ({{formattedQuota}})',
+                      percentageRewardsEnabled
+                        ? 'Quota granted once after an invited user reaches the first top-up threshold ({{formattedQuota}})'
+                        : 'Legacy quota granted at registration when percentage rewards are disabled ({{formattedQuota}})',
                       {
                         formattedQuota: formatQuotaInputValue(field.value),
                       }

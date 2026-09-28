@@ -722,6 +722,51 @@ func TestGenerateOAuthCodeBindsFlowToAuthenticatedSession(t *testing.T) {
 	assert.Equal(t, identity.SessionID, flow.SessionId)
 }
 
+func TestOAuthRegistrationPersistsInviterOnlyForNewAccounts(t *testing.T) {
+	for _, custom := range []bool{false, true} {
+		for _, affiliateCode := range []string{"referral-code", "unknown-code", ""} {
+			t.Run(fmt.Sprintf("custom=%t/code=%s", custom, affiliateCode), func(t *testing.T) {
+				inviter, _ := setupSecurityEnrollmentTest(t)
+				previousRegister, previousAffiliate, previousQuota := common.RegisterEnabled, common.AffiliateRewardEnabled, common.QuotaForNewUser
+				common.RegisterEnabled, common.AffiliateRewardEnabled, common.QuotaForNewUser = true, true, 0
+				t.Cleanup(func() {
+					common.RegisterEnabled, common.AffiliateRewardEnabled, common.QuotaForNewUser = previousRegister, previousAffiliate, previousQuota
+				})
+				require.NoError(t, model.DB.Model(inviter).Update("aff_code", "referral-code").Error)
+				var provider oauth.Provider = &legacyGitHubOAuthProvider{}
+				if custom {
+					provider = oauth.NewGenericOAuthProvider(&model.CustomOAuthProvider{Id: 42, Name: "Referral test", Slug: "referral", Enabled: true})
+				}
+				c, _ := gin.CreateTestContext(httptest.NewRecorder())
+				c.Request = httptest.NewRequest(http.MethodGet, "/api/oauth/referral", nil)
+				identity := &oauth.OAuthUser{ProviderUserID: "referred-external-user", Username: "referred-user"}
+				created, migration, err := findOrCreateOAuthUser(c, provider, identity, &oauth.OAuthToken{}, affiliateCode)
+				require.NoError(t, err)
+				require.Nil(t, migration)
+				wantInviter := 0
+				if affiliateCode == "referral-code" {
+					wantInviter = inviter.Id
+				}
+				var stored model.User
+				require.NoError(t, model.DB.First(&stored, created.Id).Error)
+				assert.Equal(t, wantInviter, stored.InviterId)
+				assert.NotEqual(t, stored.Id, stored.InviterId)
+				assert.Zero(t, stored.Quota, "percentage-mode registration must not grant a reward")
+				require.True(t, provider.IsUserIDTaken(identity.ProviderUserID), "the provider identity must be bound atomically with registration")
+
+				for _, loginCode := range []string{stored.AffCode, "referral-code"} {
+					existing, migration, err := findOrCreateOAuthUser(c, provider, identity, &oauth.OAuthToken{}, loginCode)
+					require.NoError(t, err)
+					assert.Nil(t, migration)
+					assert.Equal(t, created.Id, existing.Id)
+					require.NoError(t, model.DB.First(&stored, created.Id).Error)
+					assert.Equal(t, wantInviter, stored.InviterId, "later logins must not rebind an existing account or allow self-referral")
+				}
+			})
+		}
+	}
+}
+
 func TestOAuthLoginConsumesFlowOnlyAfterProviderIdentity(t *testing.T) {
 	provider := setupAuthFlowControllerTest(t)
 

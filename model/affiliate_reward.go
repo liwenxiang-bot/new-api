@@ -1,7 +1,9 @@
 package model
 
 import (
+	"errors"
 	"fmt"
+	"math"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -30,10 +32,7 @@ type AffiliateReward struct {
 }
 
 type AffiliateRewardResult struct {
-	InviterId       int
-	InviterQuota    int
-	InviteeQuota    int
-	QualifiedInvite bool
+	InviteeQuota int
 }
 
 // GetAffiliateQualifiedInviteCount returns the number of distinct invitees
@@ -58,21 +57,32 @@ func GetAffiliateQualifiedInviteCount(userID int) int {
 }
 
 func affiliateMinimumTopUpQuota() (int, error) {
-	if common.AffiliateRewardMinTopUp <= 0 {
+	minimum := common.AffiliateRewardMinTopUp
+	if math.IsNaN(minimum) || math.IsInf(minimum, 0) || minimum < 0 {
+		return 0, errors.New("invalid affiliate minimum top-up")
+	}
+	if minimum == 0 {
 		return 0, nil
 	}
+	if math.IsNaN(common.QuotaPerUnit) || math.IsInf(common.QuotaPerUnit, 0) || common.QuotaPerUnit <= 0 {
+		return 0, errors.New("invalid quota per unit")
+	}
 	return common.WalletQuotaFromDecimalStrict(
-		decimal.NewFromFloat(common.AffiliateRewardMinTopUp).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
+		decimal.NewFromFloat(minimum).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
 	)
 }
 
 func affiliateCommissionQuota(creditedQuota int) (int, error) {
-	if creditedQuota <= 0 || common.AffiliateRewardRatio <= 0 || common.AffiliateRewardRatio > 100 {
+	ratio := common.AffiliateRewardRatio
+	if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 || ratio > 100 {
+		return 0, errors.New("invalid affiliate commission rate")
+	}
+	if creditedQuota <= 0 || ratio == 0 {
 		return 0, nil
 	}
 	return common.WalletQuotaFromDecimalStrict(
 		decimal.NewFromInt(int64(creditedQuota)).Mul(
-			decimal.NewFromFloat(common.AffiliateRewardRatio).Div(decimal.NewFromInt(100)),
+			decimal.NewFromFloat(ratio).Div(decimal.NewFromInt(100)),
 		),
 	)
 }
@@ -100,7 +110,7 @@ func affiliateProviderAllowed(paymentProvider string) bool {
 // top-up transaction.
 func ApplyAffiliateTopUpReward(tx *gorm.DB, topUpId int, inviteeId int, creditedQuota int, paymentProvider string) (AffiliateRewardResult, error) {
 	result := AffiliateRewardResult{}
-	if !common.AffiliateRewardEnabled || !operation_setting.IsPaymentComplianceConfirmed() || topUpId <= 0 || inviteeId <= 0 {
+	if !common.AffiliateRewardEnabled || !operation_setting.IsPaymentComplianceConfirmed() || topUpId <= 0 || inviteeId <= 0 || creditedQuota <= 0 {
 		return result, nil
 	}
 	if !affiliateProviderAllowed(paymentProvider) {
@@ -109,7 +119,8 @@ func ApplyAffiliateTopUpReward(tx *gorm.DB, topUpId int, inviteeId int, credited
 
 	minimumQuota, err := affiliateMinimumTopUpQuota()
 	if err != nil {
-		return result, fmt.Errorf("invalid affiliate minimum top-up: %w", err)
+		common.SysError(fmt.Sprintf("affiliate reward skipped for top-up %d: %v", topUpId, err))
+		return result, nil
 	}
 	if minimumQuota > 0 && creditedQuota < minimumQuota {
 		return result, nil
@@ -127,7 +138,8 @@ func ApplyAffiliateTopUpReward(tx *gorm.DB, topUpId int, inviteeId int, credited
 
 	commissionQuota, err := affiliateCommissionQuota(creditedQuota)
 	if err != nil {
-		return result, fmt.Errorf("invalid affiliate commission: %w", err)
+		common.SysError(fmt.Sprintf("affiliate reward skipped for top-up %d: %v", topUpId, err))
+		return result, nil
 	}
 	if commissionQuota > 0 {
 		exists, err := affiliateRewardExists(tx, topUpId, affiliateRewardTypeCommission)
@@ -171,9 +183,6 @@ func ApplyAffiliateTopUpReward(tx *gorm.DB, topUpId int, inviteeId int, credited
 				}).Error; err != nil {
 					return result, err
 				}
-				result.InviterId = invitee.InviterId
-				result.InviterQuota = commissionQuota
-				result.QualifiedInvite = true
 			}
 		}
 	}
@@ -188,6 +197,10 @@ func ApplyAffiliateTopUpReward(tx *gorm.DB, topUpId int, inviteeId int, credited
 		}
 		if inviteeRewardCount == 0 {
 			if err := creditTopUpQuota(tx, invitee.Id, common.QuotaForInvitee, nil); err != nil {
+				if errors.Is(err, ErrTopUpQuotaLimitExceeded) || errors.Is(err, ErrInvalidTopUpQuota) {
+					common.SysError(fmt.Sprintf("affiliate invitee reward skipped for top-up %d, user %d: %v", topUpId, invitee.Id, err))
+					return result, nil
+				}
 				return result, err
 			}
 			if err := tx.Create(&AffiliateReward{

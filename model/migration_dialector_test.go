@@ -218,3 +218,218 @@ func TestMigrationSchemaStability(t *testing.T) {
 		})
 	}
 }
+
+func TestAffiliateRewardDatabaseMatrix(t *testing.T) {
+	prepareAffiliateRewardTest(t)
+	previousDB, previousLogDB := DB, LOG_DB
+	previousMainType, previousLogType := common.MainDatabaseType(), common.LogDatabaseType()
+	previousRedis, previousBatch := common.RedisEnabled, common.BatchUpdateEnabled
+	t.Cleanup(func() {
+		DB, LOG_DB = previousDB, previousLogDB
+		common.SetDatabaseTypes(previousMainType, previousLogType)
+		common.RedisEnabled, common.BatchUpdateEnabled = previousRedis, previousBatch
+		initCol()
+	})
+	common.RedisEnabled, common.BatchUpdateEnabled = false, false
+
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			var dsn string
+			switch dialect {
+			case "sqlite":
+				dsn = "local"
+				previousPath := common.SQLitePath
+				common.SQLitePath = filepath.Join(t.TempDir(), "affiliate.db")
+				t.Cleanup(func() { common.SQLitePath = previousPath })
+			case "mysql":
+				dsn = os.Getenv("TEST_MYSQL_DSN")
+			case "postgres":
+				dsn = os.Getenv("TEST_POSTGRES_DSN")
+			}
+			if dsn == "" {
+				t.Skip("test database DSN is not configured")
+			}
+			t.Setenv("AFFILIATE_MATRIX_DSN", dsn)
+			db, dbType, err := chooseDB("AFFILIATE_MATRIX_DSN", false)
+			require.NoError(t, err)
+			sqlDB, err := db.DB()
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = sqlDB.Close() })
+			sqlDB.SetMaxOpenConns(1)
+			recorder := &migrationSQLRecorder{}
+			db = db.Session(&gorm.Session{Logger: recorder})
+			DB, LOG_DB = db, db
+			common.SetDatabaseTypes(dbType, dbType)
+			initCol()
+			versionQuery := "SELECT version()"
+			if dialect == "sqlite" {
+				versionQuery = "SELECT sqlite_version()"
+			}
+			var version string
+			require.NoError(t, db.Raw(versionQuery).Scan(&version).Error)
+			t.Logf("database version: %s", version)
+
+			for _, scenario := range []string{"fresh", "upgrade"} {
+				t.Run(scenario, func(t *testing.T) {
+					models := []any{&User{}, &TopUp{}, &Log{}, &AffiliateReward{}}
+					for _, model := range models {
+						require.False(t, db.Migrator().HasTable(model), "use an empty dedicated test database")
+					}
+					t.Cleanup(func() { require.NoError(t, db.Migrator().DropTable(models...)) })
+					// User, TopUp and Log schema match release v1.0.0-rc.40
+					// (0aec08fee811ec6136828fda790551b49e410301).
+					// The upgrade fixture has real existing balances and a paid order,
+					// with no affiliate ledger until the new migration runs.
+					if scenario == "upgrade" {
+						require.NoError(t, db.AutoMigrate(&User{}, &TopUp{}, &Log{}))
+					} else {
+						require.NoError(t, db.AutoMigrate(models...))
+					}
+					inviter := createAffiliateRewardTestUser(t, 701, "matrix-inviter", 0)
+					invitee := createAffiliateRewardTestUser(t, 702, "matrix-invitee", inviter.Id)
+					require.NoError(t, db.Model(inviter).Updates(map[string]any{
+						"quota": 75, "aff_quota": 30, "aff_history": 90, "aff_count": 2,
+					}).Error)
+					require.NoError(t, db.Model(invitee).Update("quota", 25).Error)
+					originalInviter := getAffiliateRewardTestUser(t, inviter.Id)
+					originalInvitee := getAffiliateRewardTestUser(t, invitee.Id)
+					historical := createAffiliateRewardTestTopUp(t, invitee.Id, "MATRIX-HISTORICAL", PaymentProviderEpay, 20)
+					historical.Status = common.TopUpStatusSuccess
+					historical.CompleteTime = historical.CreateTime
+					require.NoError(t, db.Save(&historical).Error)
+
+					require.NoError(t, db.AutoMigrate(models...))
+					recorder.reset()
+					require.NoError(t, db.AutoMigrate(models...))
+					assert.Empty(t, recorder.schemaMutations(), "second migration must not change schema")
+					require.NoError(t, ensureUserQuotaColumns(db, dbType))
+					assert.Equal(t, originalInviter, getAffiliateRewardTestUser(t, inviter.Id))
+					assert.Equal(t, originalInvitee, getAffiliateRewardTestUser(t, invitee.Id))
+					var savedOrder TopUp
+					require.NoError(t, db.First(&savedOrder, historical.Id).Error)
+					assert.Equal(t, historical, savedOrder)
+					assert.True(t, db.Migrator().HasIndex(&AffiliateReward{}, "idx_affiliate_reward_topup_type"))
+					duplicateUser := originalInviter
+					duplicateUser.Id, duplicateUser.AffCode = 0, "different-affiliate-code"
+					assert.Error(t, db.Create(&duplicateUser).Error, "username uniqueness must survive migration")
+					duplicateUser = originalInviter
+					duplicateUser.Id, duplicateUser.Username = 0, "different-username"
+					assert.Error(t, db.Create(&duplicateUser).Error, "referral-code uniqueness must survive migration")
+					duplicateOrder := historical
+					duplicateOrder.Id = 0
+					assert.Error(t, db.Create(&duplicateOrder).Error, "payment order uniqueness must survive migration")
+
+					alreadyDone, err := RechargeEpay(historical.TradeNo, "alipay", "127.0.0.1")
+					require.NoError(t, err)
+					assert.True(t, alreadyDone)
+					assert.Zero(t, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission), "old paid orders must not earn rewards retroactively")
+					first := createAffiliateRewardTestTopUp(t, invitee.Id, "MATRIX-FIRST", PaymentProviderEpay, 20)
+					alreadyDone, err = RechargeEpay(first.TradeNo, "alipay", "127.0.0.1")
+					require.NoError(t, err)
+					assert.False(t, alreadyDone)
+					gotInviter := getAffiliateRewardTestUser(t, inviter.Id)
+					gotInvitee := getAffiliateRewardTestUser(t, invitee.Id)
+					assert.Equal(t, 230, gotInviter.AffQuota, "existing balance plus 10%% of a 2000-quota recharge")
+					assert.Equal(t, 290, gotInviter.AffHistoryQuota)
+					assert.Equal(t, 3, gotInviter.AffCount)
+					assert.Equal(t, 75, gotInviter.Quota, "commission stays in the affiliate balance")
+					assert.Equal(t, 2075, gotInvitee.Quota)
+					assert.EqualValues(t, 1, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission))
+					assert.EqualValues(t, 1, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeInvitee))
+					alreadyDone, err = RechargeEpay(first.TradeNo, "alipay", "127.0.0.1")
+					require.NoError(t, err)
+					assert.True(t, alreadyDone)
+					assert.Equal(t, gotInviter, getAffiliateRewardTestUser(t, inviter.Id))
+					assert.Equal(t, gotInvitee, getAffiliateRewardTestUser(t, invitee.Id))
+
+					var reward AffiliateReward
+					require.NoError(t, db.Where("top_up_id = ? AND reward_type = ?", first.Id, affiliateRewardTypeCommission).First(&reward).Error)
+					reward.Id = 0
+					assert.Error(t, db.Create(&reward).Error, "the database must reject a duplicate top-up reward")
+					second := createAffiliateRewardTestTopUp(t, invitee.Id, "MATRIX-SECOND", PaymentProviderEpay, 20)
+					alreadyDone, err = RechargeEpay(second.TradeNo, "alipay", "127.0.0.1")
+					require.NoError(t, err)
+					assert.False(t, alreadyDone)
+					gotInviter = getAffiliateRewardTestUser(t, inviter.Id)
+					assert.Equal(t, 430, gotInviter.AffQuota)
+					assert.Equal(t, 490, gotInviter.AffHistoryQuota)
+					assert.Equal(t, 3, gotInviter.AffCount)
+					assert.Equal(t, 4075, getAffiliateRewardTestUser(t, invitee.Id).Quota)
+					assert.EqualValues(t, 2, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission))
+					assert.EqualValues(t, 1, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeInvitee))
+					assert.Equal(t, 1, GetAffiliateQualifiedInviteCount(inviter.Id))
+					var earnedRewards []AffiliateReward
+					require.NoError(t, db.Order("id").Find(&earnedRewards).Error)
+					recorder.reset()
+					require.NoError(t, db.AutoMigrate(models...))
+					assert.Empty(t, recorder.schemaMutations(), "restart after settlement must not change schema")
+					var persistedRewards []AffiliateReward
+					require.NoError(t, db.Order("id").Find(&persistedRewards).Error)
+					assert.Equal(t, earnedRewards, persistedRewards)
+					require.Len(t, persistedRewards, 3)
+					firstReward, secondReward := persistedRewards[0], persistedRewards[2]
+					for _, historyCase := range []struct {
+						userID int
+						offset int
+						total  int64
+						items  []AffiliateRewardHistoryItem
+					}{
+						{inviter.Id, 0, 2, []AffiliateRewardHistoryItem{{Id: secondReward.Id, InviteeId: invitee.Id, Quota: 200, CreatedAt: secondReward.CreatedAt}}},
+						{inviter.Id, 1, 2, []AffiliateRewardHistoryItem{{Id: firstReward.Id, InviteeId: invitee.Id, Quota: 200, CreatedAt: firstReward.CreatedAt}}},
+						{inviter.Id, 2, 2, []AffiliateRewardHistoryItem{}},
+						{invitee.Id, 0, 0, []AffiliateRewardHistoryItem{}},
+						{799, 0, 0, []AffiliateRewardHistoryItem{}},
+					} {
+						items, total, err := GetAffiliateRewardHistory(historyCase.userID, historyCase.offset, 1)
+						require.NoError(t, err)
+						assert.Equal(t, historyCase.total, total)
+						assert.Equal(t, historyCase.items, items, "history must paginate only the requesting inviter's commissions")
+					}
+
+					expected := gotInviter
+					expected.Quota += 200
+					expected.AffQuota -= 200
+					require.NoError(t, gotInviter.TransferAffQuotaToQuota(200))
+					transferred := getAffiliateRewardTestUser(t, inviter.Id)
+					assert.Equal(t, 275, transferred.Quota)
+					assert.Equal(t, 230, transferred.AffQuota)
+					assert.Equal(t, 490, transferred.AffHistoryQuota)
+					assert.Equal(t, 3, transferred.AffCount)
+					assert.Equal(t, expected, transferred)
+					for _, quota := range []int{300, 0, -100, common.MaxWalletQuota + 1} {
+						assert.Error(t, gotInviter.TransferAffQuotaToQuota(quota))
+						assert.Equal(t, transferred, getAffiliateRewardTestUser(t, inviter.Id), "a rejected transfer must leave all balances unchanged")
+					}
+					sqlDB.SetMaxOpenConns(2)
+					start := make(chan struct{})
+					results := make(chan error, 2)
+					for range 2 {
+						go func() {
+							user := User{Id: inviter.Id}
+							<-start
+							results <- user.TransferAffQuotaToQuota(200)
+						}()
+					}
+					close(start)
+					transferErrors := []error{<-results, <-results}
+					successes := 0
+					for _, err := range transferErrors {
+						if err == nil {
+							successes++
+						}
+					}
+					assert.Equal(t, 1, successes, "only one competing transfer fits the balance: %v", transferErrors)
+					concurrentResult := getAffiliateRewardTestUser(t, inviter.Id)
+					assert.Equal(t, transferred.Quota+transferred.AffQuota, concurrentResult.Quota+concurrentResult.AffQuota)
+					expected.Quota += 200
+					expected.AffQuota -= 200
+					assert.Equal(t, expected, concurrentResult)
+					sqlDB.SetMaxOpenConns(1)
+					var logCount int64
+					require.NoError(t, db.Model(&Log{}).Where("type = ?", LogTypeTopup).Count(&logCount).Error)
+					assert.EqualValues(t, 2, logCount, "only new successful recharges write top-up logs")
+				})
+			}
+		})
+	}
+}

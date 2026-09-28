@@ -82,6 +82,23 @@ beforeEach(() => {
   vi.spyOn(api, 'put').mockResolvedValue({ data: { success: true } })
 })
 
+test('enabling percentage rewards changes the invitee reward to a first-top-up bonus', async () => {
+  const user = userEvent.setup()
+  await renderSettings()
+  expect(
+    screen.getByRole('spinbutton', { name: 'Invitee Reward' })
+  ).toBeVisible()
+  await user.click(
+    screen.getByRole('switch', { name: 'Enable Percentage Referral Rewards' })
+  )
+  expect(
+    screen.getByRole('spinbutton', { name: 'Invitee First Top-Up Reward' })
+  ).toBeVisible()
+  expect(
+    screen.queryByRole('spinbutton', { name: 'Invitee Reward' })
+  ).not.toBeInTheDocument()
+})
+
 test.each(['0.5', '1.5', '2.5', '0.0001'])(
   'typing multiplier %s preserves the decimal and saves its numeric value',
   async (value) => {

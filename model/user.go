@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -258,9 +259,10 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 
 	// 个人中心区域 - 所有用户都可以访问
 	defaultConfig["personal"] = map[string]any{
-		"enabled":  true,
-		"topup":    true,
-		"personal": true,
+		"referrals": true,
+		"enabled":   true,
+		"topup":     true,
+		"personal":  true,
 	}
 
 	// 管理员区域 - 根据角色决定
@@ -595,40 +597,48 @@ func inviteUser(inviterId int) error {
 }
 
 func (user *User) TransferAffQuotaToQuota(quota int) error {
-	// 检查quota是否小于最小额度
+	if quota <= 0 || quota > common.MaxWalletQuota {
+		return errors.New("转移额度无效！")
+	}
+	if math.IsNaN(common.QuotaPerUnit) || math.IsInf(common.QuotaPerUnit, 0) || common.QuotaPerUnit <= 0 {
+		return errors.New("邀请额度单位配置无效！")
+	}
 	if float64(quota) < common.QuotaPerUnit {
 		return fmt.Errorf("转移额度最小为%s！", logger.LogQuota(common.QuotaFromFloat(common.QuotaPerUnit)))
 	}
 
-	// 开始数据库事务
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return tx.Error
-	}
-	defer tx.Rollback() // 确保在函数退出时事务能回滚
-
-	// 加锁查询用户以确保数据一致性
-	err := lockForUpdate(tx).First(user, user.Id).Error
-	if err != nil {
+	var updated User
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).First(&updated, user.Id).Error; err != nil {
+			return err
+		}
+		if updated.AffQuota < quota {
+			return errors.New("邀请额度不足！")
+		}
+		maxCurrentQuota := common.MaxWalletQuota - quota
+		if updated.Quota > maxCurrentQuota {
+			return ErrWalletQuotaLimitExceeded
+		}
+		result := tx.Model(&User{}).
+			Where("id = ? AND aff_quota >= ? AND quota <= ?", user.Id, quota, maxCurrentQuota).
+			Updates(map[string]any{
+				"aff_quota": gorm.Expr("aff_quota - ?", quota),
+				"quota":     gorm.Expr("quota + ?", quota),
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return errors.New("邀请额度转移失败，请重试！")
+		}
+		return tx.First(&updated, user.Id).Error
+	}); err != nil {
 		return err
 	}
 
-	// 再次检查用户的AffQuota是否足够
-	if user.AffQuota < quota {
-		return errors.New("邀请额度不足！")
-	}
-
-	// 更新用户额度
-	user.AffQuota -= quota
-	user.Quota += quota
-
-	// 保存用户状态
-	if err := tx.Save(user).Error; err != nil {
-		return err
-	}
-
-	// 提交事务
-	return tx.Commit().Error
+	*user = updated
+	syncCreditUserQuotaCache(user.Id, quota, "affiliate transfer")
+	return nil
 }
 
 func (user *User) prepareForInsert(tx *gorm.DB) error {

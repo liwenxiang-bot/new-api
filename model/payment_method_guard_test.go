@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -88,6 +89,29 @@ func getUserQuotaForPaymentGuardTest(t *testing.T, userID int) int {
 	var user User
 	require.NoError(t, DB.Select("quota").Where("id = ?", userID).First(&user).Error)
 	return user.Quota
+}
+
+func TestAffiliateRewardHistoryScopesAndPaginatesCommissionRecords(t *testing.T) {
+	truncateTables(t)
+	records := []AffiliateReward{
+		{TopUpId: 1, InviterId: 10, InviteeId: 20, RecipientId: 10, RewardType: affiliateRewardTypeCommission, Quota: 100, CreatedAt: 1000},
+		{TopUpId: 2, InviterId: 11, InviteeId: 21, RecipientId: 11, RewardType: affiliateRewardTypeCommission, Quota: 200, CreatedAt: 1001},
+		{TopUpId: 1, InviterId: 10, InviteeId: 20, RecipientId: 20, RewardType: affiliateRewardTypeInvitee, Quota: 50, CreatedAt: 1000},
+		{TopUpId: 3, InviterId: 10, InviteeId: 22, RecipientId: 10, RewardType: affiliateRewardTypeCommission, Quota: 300, CreatedAt: 1002},
+	}
+	require.NoError(t, DB.Create(&records).Error)
+	items, total, err := GetAffiliateRewardHistory(10, 0, 1)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, total)
+	assert.Equal(t, []AffiliateRewardHistoryItem{{Id: records[3].Id, InviteeId: 22, Quota: 300, CreatedAt: 1002}}, items)
+	items, total, err = GetAffiliateRewardHistory(10, 1, 1)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, total)
+	assert.Equal(t, []AffiliateRewardHistoryItem{{Id: records[0].Id, InviteeId: 20, Quota: 100, CreatedAt: 1000}}, items)
+	items, total, err = GetAffiliateRewardHistory(99, 0, 10)
+	require.NoError(t, err)
+	assert.Empty(t, items)
+	assert.Zero(t, total)
 }
 
 func prepareAffiliateRewardTest(t *testing.T) {
@@ -200,6 +224,220 @@ func TestAffiliateTopUpRewardPercentageAndIdempotency(t *testing.T) {
 	assert.Equal(t, 1, gotInviter.AffCount, "one invitee counts once across recurring top-ups")
 	assert.Equal(t, int64(2), countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission))
 	assert.Equal(t, 1, GetAffiliateQualifiedInviteCount(inviter.Id))
+	assert.Equal(t, 4050, getAffiliateRewardTestUser(t, invitee.Id).Quota)
+	assert.Equal(t, int64(1), countAffiliateRewards(t, invitee.Id, affiliateRewardTypeInvitee))
+}
+
+func TestAffiliateTransferConservesBalancesAndUpdatesCache(t *testing.T) {
+	truncateTables(t)
+	prepareAffiliateRewardTest(t)
+	useUserCacheMiniRedis(t)
+	user := createAffiliateRewardTestUser(t, 630, "affiliate-transfer", 0)
+	require.NoError(t, DB.Model(user).Updates(map[string]any{"quota": 200, "aff_quota": 300, "aff_history": 700}).Error)
+	*user = getAffiliateRewardTestUser(t, user.Id)
+	require.NoError(t, populateUserCache(*user))
+
+	require.NoError(t, user.TransferAffQuotaToQuota(300))
+	stored := getAffiliateRewardTestUser(t, user.Id)
+	assert.Equal(t, 500, stored.Quota)
+	assert.Zero(t, stored.AffQuota)
+	assert.Equal(t, 700, stored.AffHistoryQuota)
+	assert.Equal(t, 500, stored.Quota+stored.AffQuota)
+	cached, err := cacheGetUserBase(user.Id)
+	require.NoError(t, err)
+	assert.Equal(t, stored.Quota, cached.Quota)
+
+	require.Error(t, user.TransferAffQuotaToQuota(300), "spent rewards cannot be transferred again")
+	stored = getAffiliateRewardTestUser(t, user.Id)
+	assert.Equal(t, 500, stored.Quota)
+	assert.Zero(t, stored.AffQuota)
+	cached, err = cacheGetUserBase(user.Id)
+	require.NoError(t, err)
+	assert.Equal(t, 500, cached.Quota)
+}
+
+func TestAffiliateTransferEnforcesWalletLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		wallet  int
+		amount  int
+		wantErr bool
+	}{
+		{name: "exact wallet limit", wallet: common.MaxWalletQuota - 100, amount: 100},
+		{name: "exceeds wallet limit", wallet: common.MaxWalletQuota - 99, amount: 100, wantErr: true},
+		{name: "negative transfer", wallet: 100, amount: -100, wantErr: true},
+		{name: "zero transfer", wallet: 100, amount: 0, wantErr: true},
+		{name: "below minimum", wallet: 100, amount: 99, wantErr: true},
+		{name: "out of range transfer", wallet: 100, amount: common.MaxWalletQuota + 1, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			truncateTables(t)
+			prepareAffiliateRewardTest(t)
+			user := createAffiliateRewardTestUser(t, 631, "affiliate-transfer-limit", 0)
+			require.NoError(t, DB.Model(user).Updates(map[string]any{"quota": tc.wallet, "aff_quota": 100, "aff_history": 100}).Error)
+			err := user.TransferAffQuotaToQuota(tc.amount)
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			stored := getAffiliateRewardTestUser(t, user.Id)
+			if tc.wantErr {
+				assert.Equal(t, tc.wallet, stored.Quota)
+				assert.Equal(t, 100, stored.AffQuota)
+			} else {
+				assert.Equal(t, common.MaxWalletQuota, stored.Quota)
+				assert.Zero(t, stored.AffQuota)
+			}
+			assert.Equal(t, 100, stored.AffHistoryQuota)
+		})
+	}
+}
+
+func TestAffiliateOptionalRewardLimitsDoNotBlockTopUp(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		inviteeQuota     int
+		inviteeReward    int
+		inviterQuota     int
+		wantInviteeQuota int
+		wantInviterQuota int
+		wantBonusCount   int64
+		wantRewardCount  int64
+	}{
+		{name: "invitee wallet at limit", inviteeQuota: common.MaxWalletQuota - 2000, inviteeReward: 50, wantInviteeQuota: common.MaxWalletQuota, wantInviterQuota: 200, wantRewardCount: 1},
+		{name: "invitee reward out of range", inviteeReward: common.MaxWalletQuota + 1, wantInviteeQuota: 2000, wantInviterQuota: 200, wantRewardCount: 1},
+		{name: "inviter reward wallet at limit", inviterQuota: common.MaxWalletQuota, inviteeReward: 50, wantInviteeQuota: 2050, wantInviterQuota: common.MaxWalletQuota, wantBonusCount: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			truncateTables(t)
+			prepareAffiliateRewardTest(t)
+			common.QuotaForInvitee = tc.inviteeReward
+			inviter := createAffiliateRewardTestUser(t, 641, "affiliate-limit-inviter", 0)
+			invitee := createAffiliateRewardTestUser(t, 642, "affiliate-limit-invitee", inviter.Id)
+			require.NoError(t, DB.Model(inviter).Updates(map[string]any{"aff_quota": tc.inviterQuota, "aff_history": tc.inviterQuota}).Error)
+			require.NoError(t, DB.Model(invitee).Update("quota", tc.inviteeQuota).Error)
+			order := createAffiliateRewardTestTopUp(t, invitee.Id, "AFFILIATE-OPTIONAL-LIMIT", PaymentProviderEpay, 20)
+			_, err := RechargeEpay(order.TradeNo, "alipay", "127.0.0.1")
+			require.NoError(t, err)
+			assert.Equal(t, common.TopUpStatusSuccess, getTopUpStatusForPaymentGuardTest(t, order.TradeNo))
+			assert.Equal(t, tc.wantInviteeQuota, getAffiliateRewardTestUser(t, invitee.Id).Quota)
+			assert.Equal(t, tc.wantInviterQuota, getAffiliateRewardTestUser(t, inviter.Id).AffQuota)
+			assert.Equal(t, tc.wantBonusCount, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeInvitee))
+			assert.Equal(t, tc.wantRewardCount, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission))
+		})
+	}
+}
+
+func TestAffiliateInvalidConfigurationDoesNotBlockTopUp(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		ratio   float64
+		minimum float64
+	}{
+		{name: "NaN rate", ratio: math.NaN(), minimum: 10},
+		{name: "infinite rate", ratio: math.Inf(1), minimum: 10},
+		{name: "negative infinite rate", ratio: math.Inf(-1), minimum: 10},
+		{name: "rate above limit", ratio: 101, minimum: 10},
+		{name: "NaN minimum", ratio: 10, minimum: math.NaN()},
+		{name: "infinite minimum", ratio: 10, minimum: math.Inf(1)},
+		{name: "negative minimum", ratio: 10, minimum: -1},
+		{name: "minimum conversion overflow", ratio: 10, minimum: math.MaxFloat64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			truncateTables(t)
+			prepareAffiliateRewardTest(t)
+			common.AffiliateRewardRatio = tc.ratio
+			common.AffiliateRewardMinTopUp = tc.minimum
+			inviter := createAffiliateRewardTestUser(t, 651, "affiliate-config-inviter", 0)
+			invitee := createAffiliateRewardTestUser(t, 652, "affiliate-config-invitee", inviter.Id)
+			order := createAffiliateRewardTestTopUp(t, invitee.Id, "AFFILIATE-INVALID-CONFIG", PaymentProviderEpay, 20)
+			_, err := RechargeEpay(order.TradeNo, "alipay", "127.0.0.1")
+			require.NoError(t, err)
+			assert.Equal(t, common.TopUpStatusSuccess, getTopUpStatusForPaymentGuardTest(t, order.TradeNo))
+			assert.Equal(t, 2000, getAffiliateRewardTestUser(t, invitee.Id).Quota)
+			assert.Zero(t, getAffiliateRewardTestUser(t, inviter.Id).AffQuota)
+			assert.Zero(t, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeInvitee))
+			assert.Zero(t, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission))
+		})
+	}
+}
+
+func TestAffiliateRejectsInvalidQuotaUnitWithoutMutation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		unit float64
+	}{
+		{name: "NaN", unit: math.NaN()},
+		{name: "infinite", unit: math.Inf(1)},
+		{name: "zero", unit: 0},
+		{name: "negative", unit: -1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			truncateTables(t)
+			prepareAffiliateRewardTest(t)
+			user := createAffiliateRewardTestUser(t, 655, "affiliate-invalid-unit", 0)
+			require.NoError(t, DB.Model(user).Updates(map[string]any{"quota": 200, "aff_quota": 100}).Error)
+			order := createAffiliateRewardTestTopUp(t, user.Id, "AFFILIATE-INVALID-UNIT", PaymentProviderEpay, 20)
+			common.QuotaPerUnit = tc.unit
+			_, err := RechargeEpay(order.TradeNo, "alipay", "127.0.0.1")
+			require.ErrorIs(t, err, ErrInvalidTopUpQuota)
+			require.Error(t, user.TransferAffQuotaToQuota(100))
+			stored := getAffiliateRewardTestUser(t, user.Id)
+			assert.Equal(t, 200, stored.Quota)
+			assert.Equal(t, 100, stored.AffQuota)
+			assert.Equal(t, common.TopUpStatusPending, getTopUpStatusForPaymentGuardTest(t, order.TradeNo))
+		})
+	}
+}
+
+func TestAffiliateTopUpProviderUnits(t *testing.T) {
+	for _, tc := range []struct {
+		provider string
+		amount   int64
+		money    float64
+		quota    int
+	}{
+		{provider: PaymentProviderEpay, amount: 20, money: 15, quota: 2000},
+		{provider: PaymentProviderStripe, amount: 20, money: 15, quota: 1500},
+		{provider: PaymentProviderCreem, amount: 2000, money: 15, quota: 2000},
+		{provider: PaymentProviderWaffo, amount: 20, money: 15, quota: 2000},
+		{provider: PaymentProviderWaffoPancake, amount: 20, money: 15, quota: 2000},
+	} {
+		for _, completion := range []string{"callback", "manual"} {
+			t.Run(tc.provider+"/"+completion, func(t *testing.T) {
+				truncateTables(t)
+				prepareAffiliateRewardTest(t)
+				inviter := createAffiliateRewardTestUser(t, 661, "affiliate-provider-inviter", 0)
+				invitee := createAffiliateRewardTestUser(t, 662, "affiliate-provider-invitee", inviter.Id)
+				order := createAffiliateRewardTestTopUp(t, invitee.Id, "AFFILIATE-PROVIDER-UNITS", tc.provider, tc.amount)
+				require.NoError(t, DB.Model(&order).Update("money", tc.money).Error)
+				if completion == "manual" {
+					require.NoError(t, ManualCompleteTopUp(order.TradeNo, "127.0.0.1"))
+				} else {
+					switch tc.provider {
+					case PaymentProviderEpay:
+						_, err := RechargeEpay(order.TradeNo, "alipay", "127.0.0.1")
+						require.NoError(t, err)
+					case PaymentProviderStripe:
+						require.NoError(t, Recharge(order.TradeNo, "customer-id", "127.0.0.1"))
+					case PaymentProviderCreem:
+						require.NoError(t, RechargeCreem(order.TradeNo, "", "", "127.0.0.1"))
+					case PaymentProviderWaffo:
+						require.NoError(t, RechargeWaffo(order.TradeNo, "127.0.0.1"))
+					case PaymentProviderWaffoPancake:
+						require.NoError(t, RechargeWaffoPancake(order.TradeNo))
+					}
+				}
+				assert.Equal(t, tc.quota+50, getAffiliateRewardTestUser(t, invitee.Id).Quota)
+				assert.Equal(t, tc.quota/10, getAffiliateRewardTestUser(t, inviter.Id).AffQuota)
+				require.NoError(t, ManualCompleteTopUp(order.TradeNo, "127.0.0.1"))
+				assert.Equal(t, tc.quota+50, getAffiliateRewardTestUser(t, invitee.Id).Quota)
+				assert.Equal(t, int64(1), countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission))
+				assert.Equal(t, int64(1), countAffiliateRewards(t, invitee.Id, affiliateRewardTypeInvitee))
+			})
+		}
+	}
 }
 
 func TestAffiliateTopUpRewardSkipsBelowMinimum(t *testing.T) {

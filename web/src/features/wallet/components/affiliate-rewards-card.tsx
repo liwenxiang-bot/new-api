@@ -25,7 +25,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatQuota } from '@/lib/format'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatCurrencyFromUSD, formatQuotaWithCurrency } from '@/lib/currency'
+import { formatNumber } from '@/lib/format'
 
 import type { UserWalletData } from '../types'
 
@@ -37,18 +39,20 @@ interface AffiliateRewardsCardProps {
   loading?: boolean
 }
 
-export function AffiliateRewardsCard({
-  user,
-  affiliateLink,
-  onTransfer,
-  complianceConfirmed = true,
-  loading,
-}: AffiliateRewardsCardProps) {
-  const { t } = useTranslation()
-  if (loading) {
+export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const currencyOptions = {
+    locale,
+    abbreviate: true,
+    digitsLarge: 2,
+    digitsSmall: 4,
+  }
+  const complianceConfirmed = props.complianceConfirmed ?? true
+  if (props.loading) {
     return (
       <Card data-card-hover='false' className='bg-muted/20 py-0'>
-        <CardContent className='grid gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,0.72fr)_minmax(320px,1.15fr)] lg:items-center'>
+        <CardContent className='grid gap-4 p-4 sm:p-6'>
           <div>
             <Skeleton className='h-5 w-32' />
             <Skeleton className='mt-2 h-4 w-48' />
@@ -60,15 +64,15 @@ export function AffiliateRewardsCard({
     )
   }
 
-  const hasRewards = (user?.aff_quota ?? 0) > 0
-  const percentageRewardsEnabled = user?.affiliate_reward_enabled === true
-  const rewardRatio = user?.affiliate_reward_ratio ?? 0
-  const minimumTopUp = user?.affiliate_reward_min_top_up ?? 0
-  const inviteeReward = user?.affiliate_invitee_reward ?? 0
+  const hasRewards = (props.user?.aff_quota ?? 0) > 0
+  const percentageRewardsEnabled = props.user?.affiliate_reward_enabled === true
+  const rewardRatio = props.user?.affiliate_reward_ratio ?? 0
+  const minimumTopUp = props.user?.affiliate_reward_min_top_up ?? 0
+  const inviteeReward = props.user?.affiliate_invitee_reward ?? 0
 
   return (
     <Card data-card-hover='false' className='bg-muted/20 py-0'>
-      <CardContent className='grid gap-3 p-3 sm:gap-4 sm:p-4 lg:grid-cols-[minmax(200px,1fr)_minmax(180px,0.65fr)_minmax(280px,1fr)] lg:items-center'>
+      <CardContent className='grid min-w-0 gap-6 p-4 sm:p-6'>
         <div className='flex min-w-0 items-center gap-2.5'>
           <IconBadge tone='chart-3'>
             <Share2 />
@@ -77,7 +81,7 @@ export function AffiliateRewardsCard({
             <h3 className='truncate text-sm font-semibold'>
               {t('Referral Rewards')}
             </h3>
-            <p className='text-muted-foreground line-clamp-1 text-xs'>
+            <p className='text-muted-foreground text-sm'>
               {percentageRewardsEnabled
                 ? t('Earn a percentage when referred users top up.')
                 : t(
@@ -87,20 +91,42 @@ export function AffiliateRewardsCard({
           </div>
         </div>
 
-        <div className='grid grid-cols-3 gap-1.5 text-center'>
+        <div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
           {[
-            [t('Pending'), formatQuota(user?.aff_quota ?? 0)],
-            [t('Total Earned'), formatQuota(user?.aff_history_quota ?? 0)],
             [
-              t('Qualified Invites'),
-              String(user?.affiliate_qualified_invites ?? user?.aff_count ?? 0),
+              t('Pending'),
+              formatQuotaWithCurrency(
+                props.user?.aff_quota ?? 0,
+                currencyOptions
+              ),
+            ],
+            [
+              t('Total Earned'),
+              formatQuotaWithCurrency(
+                props.user?.aff_history_quota ?? 0,
+                currencyOptions
+              ),
+            ],
+            [
+              percentageRewardsEnabled
+                ? t('Qualified Invites')
+                : t('Invited Users'),
+              formatNumber(
+                percentageRewardsEnabled
+                  ? (props.user?.affiliate_qualified_invites ?? 0)
+                  : (props.user?.aff_count ?? 0),
+                locale
+              ),
             ],
           ].map(([label, value]) => (
-            <div key={label}>
-              <div className='text-muted-foreground truncate text-[10px] font-medium tracking-wider uppercase'>
+            <div
+              key={label}
+              className='bg-background/70 min-w-0 rounded-xl border p-4'
+            >
+              <div className='text-muted-foreground text-xs font-medium'>
                 {label}
               </div>
-              <div className='mt-0.5 truncate text-sm font-semibold tabular-nums'>
+              <div className='mt-2 text-2xl font-semibold break-all tabular-nums'>
                 {value}
               </div>
             </div>
@@ -108,34 +134,39 @@ export function AffiliateRewardsCard({
         </div>
 
         {percentageRewardsEnabled ? (
-          <div className='text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs lg:col-span-3'>
+          <div className='text-muted-foreground flex flex-wrap items-center gap-x-6 gap-y-2 text-sm'>
             <span>
               {t('Commission rate')}:{' '}
-              <strong className='text-foreground'>{rewardRatio}%</strong>
+              <strong className='text-foreground'>
+                {formatNumber(rewardRatio, locale)}%
+              </strong>
             </span>
             <span>
               {t('Minimum qualifying top-up')}:{' '}
-              <strong className='text-foreground'>${minimumTopUp}</strong>
+              <strong className='text-foreground'>
+                {formatCurrencyFromUSD(minimumTopUp, { locale })}
+              </strong>
             </span>
             {inviteeReward > 0 ? (
               <span>
                 {t('Invitee reward')}:{' '}
                 <strong className='text-foreground'>
-                  {formatQuota(inviteeReward)}
+                  {formatQuotaWithCurrency(inviteeReward, currencyOptions)}
                 </strong>
               </span>
             ) : null}
           </div>
         ) : null}
 
-        <div className='flex items-center gap-2'>
+        <div className='flex min-w-0 flex-wrap items-center gap-2'>
           <Input
-            value={affiliateLink}
+            value={props.affiliateLink}
             readOnly
-            className='border-muted bg-background/70 h-9 min-w-0 flex-1 font-mono text-xs'
+            aria-label={t('Referral link:')}
+            className='border-muted bg-background/70 h-10 min-w-0 flex-1 basis-48 font-mono text-xs'
           />
           <CopyButton
-            value={affiliateLink}
+            value={props.affiliateLink}
             variant='outline'
             className='bg-background size-9 shrink-0'
             iconClassName='size-4'
@@ -144,7 +175,7 @@ export function AffiliateRewardsCard({
           />
           {hasRewards && (
             <Button
-              onClick={onTransfer}
+              onClick={props.onTransfer}
               disabled={!complianceConfirmed}
               className='h-9 shrink-0 px-3'
               size='sm'
@@ -153,7 +184,7 @@ export function AffiliateRewardsCard({
             </Button>
           )}
         </div>
-        <p className='text-muted-foreground text-xs lg:col-span-3'>
+        <p className='text-muted-foreground text-sm'>
           {t(
             'Rewards can only be transferred to your balance. Cash withdrawal is unavailable.'
           )}
@@ -162,7 +193,7 @@ export function AffiliateRewardsCard({
             : ''}
         </p>
         {!complianceConfirmed ? (
-          <p className='text-muted-foreground text-xs lg:col-span-3'>
+          <p className='text-muted-foreground text-sm'>
             {t(
               'Referral reward transfer is disabled until the administrator confirms compliance terms.'
             )}
