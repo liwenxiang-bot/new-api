@@ -728,6 +728,12 @@ func (user *User) finishInsert(inviterId int) {
 		RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(common.QuotaForNewUser)))
 	}
 	if inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
+		// Percentage rewards are settled only after the invitee completes a
+		// qualifying external top-up. Keep the old registration rewards as a
+		// compatibility path while the new module is disabled.
+		if common.AffiliateRewardEnabled {
+			return
+		}
 		if common.QuotaForInvitee > 0 {
 			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
 			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
@@ -785,6 +791,9 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 		RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(common.QuotaForNewUser)))
 	}
 	if inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
+		if common.AffiliateRewardEnabled {
+			return
+		}
 		if common.QuotaForInvitee > 0 {
 			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
 			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))

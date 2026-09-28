@@ -240,6 +240,16 @@ export interface UserWalletData {
   aff_history_quota: number
   /** Number of successful affiliate invites */
   aff_count: number
+  /** Number of invitees who completed a qualifying top-up */
+  affiliate_qualified_invites?: number
+  /** Whether percentage-based referral rewards are enabled */
+  affiliate_reward_enabled?: boolean
+  /** Referral commission rate as a percentage */
+  affiliate_reward_ratio?: number
+  /** Minimum qualifying top-up amount in USD */
+  affiliate_reward_min_top_up?: number
+  /** Optional one-time reward for the referred user, in quota units */
+  affiliate_invitee_reward?: number
   /** User group */
   group: string
 }

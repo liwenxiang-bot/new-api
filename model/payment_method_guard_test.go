@@ -1,10 +1,12 @@
 package model
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -86,6 +88,164 @@ func getUserQuotaForPaymentGuardTest(t *testing.T, userID int) int {
 	var user User
 	require.NoError(t, DB.Select("quota").Where("id = ?", userID).First(&user).Error)
 	return user.Quota
+}
+
+func prepareAffiliateRewardTest(t *testing.T) {
+	t.Helper()
+	setting := operation_setting.GetPaymentSetting()
+	originalConfirmed := setting.ComplianceConfirmed
+	originalTermsVersion := setting.ComplianceTermsVersion
+	originalEnabled := common.AffiliateRewardEnabled
+	originalRatio := common.AffiliateRewardRatio
+	originalMinimum := common.AffiliateRewardMinTopUp
+	originalInviterReward := common.QuotaForInviter
+	originalInviteeReward := common.QuotaForInvitee
+	originalQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() {
+		setting.ComplianceConfirmed = originalConfirmed
+		setting.ComplianceTermsVersion = originalTermsVersion
+		common.AffiliateRewardEnabled = originalEnabled
+		common.AffiliateRewardRatio = originalRatio
+		common.AffiliateRewardMinTopUp = originalMinimum
+		common.QuotaForInviter = originalInviterReward
+		common.QuotaForInvitee = originalInviteeReward
+		common.QuotaPerUnit = originalQuotaPerUnit
+	})
+	setting.ComplianceConfirmed = true
+	setting.ComplianceTermsVersion = operation_setting.CurrentComplianceTermsVersion
+	common.AffiliateRewardEnabled = true
+	common.AffiliateRewardRatio = 10
+	common.AffiliateRewardMinTopUp = 10
+	common.QuotaForInvitee = 50
+	common.QuotaPerUnit = 100
+}
+
+func createAffiliateRewardTestUser(t *testing.T, id int, username string, inviterID int) *User {
+	t.Helper()
+	user := &User{
+		Id:        id,
+		Username:  username,
+		Status:    common.UserStatusEnabled,
+		InviterId: inviterID,
+		AffCode:   fmt.Sprintf("affiliate-code-%d", id),
+	}
+	require.NoError(t, DB.Create(user).Error)
+	return user
+}
+
+func createAffiliateRewardTestTopUp(t *testing.T, userID int, tradeNo string, provider string, amount int64) TopUp {
+	t.Helper()
+	topUp := TopUp{
+		UserId:          userID,
+		Amount:          amount,
+		Money:           float64(amount),
+		TradeNo:         tradeNo,
+		PaymentMethod:   provider,
+		PaymentProvider: provider,
+		CreateTime:      common.GetTimestamp(),
+		Status:          common.TopUpStatusPending,
+	}
+	require.NoError(t, topUp.Insert())
+	return topUp
+}
+
+func getAffiliateRewardTestUser(t *testing.T, userID int) User {
+	t.Helper()
+	var user User
+	require.NoError(t, DB.First(&user, userID).Error)
+	return user
+}
+
+func countAffiliateRewards(t *testing.T, inviteeID int, rewardType string) int64 {
+	t.Helper()
+	var count int64
+	require.NoError(t, DB.Model(&AffiliateReward{}).Where("invitee_id = ? AND reward_type = ?", inviteeID, rewardType).Count(&count).Error)
+	return count
+}
+
+func TestAffiliateTopUpRewardPercentageAndIdempotency(t *testing.T) {
+	truncateTables(t)
+	prepareAffiliateRewardTest(t)
+
+	inviter := createAffiliateRewardTestUser(t, 601, "affiliate-inviter", 0)
+	invitee := createAffiliateRewardTestUser(t, 602, "affiliate-invitee", inviter.Id)
+	first := createAffiliateRewardTestTopUp(t, invitee.Id, "AFFILIATE-REWARD-1", PaymentProviderEpay, 20)
+
+	alreadyDone, err := RechargeEpay(first.TradeNo, "alipay", "127.0.0.1")
+	require.NoError(t, err)
+	assert.False(t, alreadyDone)
+
+	gotInviter := getAffiliateRewardTestUser(t, inviter.Id)
+	gotInvitee := getAffiliateRewardTestUser(t, invitee.Id)
+	assert.Equal(t, 200, gotInviter.AffQuota, "10%% of 20*100 quota")
+	assert.Equal(t, 200, gotInviter.AffHistoryQuota)
+	assert.Equal(t, 1, gotInviter.AffCount)
+	assert.Equal(t, 2050, gotInvitee.Quota, "top-up plus one-time invitee reward")
+	assert.Equal(t, int64(1), countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission))
+	assert.Equal(t, int64(1), countAffiliateRewards(t, invitee.Id, affiliateRewardTypeInvitee))
+
+	alreadyDone, err = RechargeEpay(first.TradeNo, "alipay", "127.0.0.1")
+	require.NoError(t, err)
+	assert.True(t, alreadyDone)
+	gotInviter = getAffiliateRewardTestUser(t, inviter.Id)
+	gotInvitee = getAffiliateRewardTestUser(t, invitee.Id)
+	assert.Equal(t, 200, gotInviter.AffQuota)
+	assert.Equal(t, 2050, gotInvitee.Quota)
+
+	second := createAffiliateRewardTestTopUp(t, invitee.Id, "AFFILIATE-REWARD-2", PaymentProviderEpay, 20)
+	_, err = RechargeEpay(second.TradeNo, "alipay", "127.0.0.1")
+	require.NoError(t, err)
+	gotInviter = getAffiliateRewardTestUser(t, inviter.Id)
+	assert.Equal(t, 400, gotInviter.AffQuota)
+	assert.Equal(t, 1, gotInviter.AffCount, "one invitee counts once across recurring top-ups")
+	assert.Equal(t, int64(2), countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission))
+	assert.Equal(t, 1, GetAffiliateQualifiedInviteCount(inviter.Id))
+}
+
+func TestAffiliateTopUpRewardSkipsBelowMinimum(t *testing.T) {
+	truncateTables(t)
+	prepareAffiliateRewardTest(t)
+
+	inviter := createAffiliateRewardTestUser(t, 611, "affiliate-minimum-inviter", 0)
+	invitee := createAffiliateRewardTestUser(t, 612, "affiliate-minimum-invitee", inviter.Id)
+	topUp := createAffiliateRewardTestTopUp(t, invitee.Id, "AFFILIATE-REWARD-MINIMUM", PaymentProviderEpay, 5)
+
+	_, err := RechargeEpay(topUp.TradeNo, "alipay", "127.0.0.1")
+	require.NoError(t, err)
+	assert.Equal(t, 0, getAffiliateRewardTestUser(t, inviter.Id).AffQuota)
+	assert.Equal(t, 500, getAffiliateRewardTestUser(t, invitee.Id).Quota)
+	assert.Zero(t, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission))
+	assert.Zero(t, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeInvitee))
+}
+
+func TestAffiliatePercentageModeDoesNotRewardRegistrationAlone(t *testing.T) {
+	truncateTables(t)
+	prepareAffiliateRewardTest(t)
+	common.QuotaForInviter = 100
+
+	inviter := createAffiliateRewardTestUser(t, 616, "affiliate-registration-inviter", 0)
+	invitee := createAffiliateRewardTestUser(t, 617, "affiliate-registration-invitee", 0)
+
+	invitee.FinishInsert(inviter.Id)
+
+	assert.Equal(t, 0, getAffiliateRewardTestUser(t, inviter.Id).AffQuota)
+	assert.Equal(t, 0, getAffiliateRewardTestUser(t, inviter.Id).AffCount)
+	assert.Equal(t, 0, getAffiliateRewardTestUser(t, invitee.Id).Quota)
+}
+
+func TestAffiliateTopUpRewardRejectsNonCashManualTopUp(t *testing.T) {
+	truncateTables(t)
+	prepareAffiliateRewardTest(t)
+
+	inviter := createAffiliateRewardTestUser(t, 621, "affiliate-noncash-inviter", 0)
+	invitee := createAffiliateRewardTestUser(t, 622, "affiliate-noncash-invitee", inviter.Id)
+	topUp := createAffiliateRewardTestTopUp(t, invitee.Id, "AFFILIATE-REWARD-BALANCE", PaymentProviderBalance, 20)
+
+	require.NoError(t, ManualCompleteTopUp(topUp.TradeNo, "127.0.0.1"))
+	assert.Equal(t, 0, getAffiliateRewardTestUser(t, inviter.Id).AffQuota)
+	assert.Equal(t, 2000, getAffiliateRewardTestUser(t, invitee.Id).Quota)
+	assert.Zero(t, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeCommission))
+	assert.Zero(t, countAffiliateRewards(t, invitee.Id, affiliateRewardTypeInvitee))
 }
 
 func TestRechargeWaffoPancake_RejectsMismatchedPaymentMethod(t *testing.T) {

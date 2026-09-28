@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"slices"
 	"sort"
@@ -204,6 +205,32 @@ func UpdateOption(c *gin.Context) {
 	case "QuotaForInviter", "QuotaForInvitee":
 		if isPositiveOptionValue(option.Value.(string)) && !operation_setting.IsPaymentComplianceConfirmed() {
 			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
+			return
+		}
+	case "AffiliateRewardEnabled":
+		enabled, err := strconv.ParseBool(option.Value.(string))
+		if err != nil {
+			common.ApiErrorMsg(c, "邀请奖励开关必须是布尔值")
+			return
+		}
+		if enabled && !operation_setting.IsPaymentComplianceConfirmed() {
+			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
+			return
+		}
+	case "AffiliateRewardRatio":
+		ratio, err := strconv.ParseFloat(strings.TrimSpace(option.Value.(string)), 64)
+		if err != nil || math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 || ratio > 100 {
+			common.ApiErrorMsg(c, "邀请返佣比例必须在 0 到 100 之间")
+			return
+		}
+		if ratio > 0 && !operation_setting.IsPaymentComplianceConfirmed() {
+			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
+			return
+		}
+	case "AffiliateRewardMinTopUp":
+		minimum, err := strconv.ParseFloat(strings.TrimSpace(option.Value.(string)), 64)
+		if err != nil || math.IsNaN(minimum) || math.IsInf(minimum, 0) || minimum < 0 || minimum > 1_000_000 {
+			common.ApiErrorMsg(c, "邀请返佣最低充值金额必须在 0 到 1000000 之间")
 			return
 		}
 	default:

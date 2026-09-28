@@ -125,6 +125,19 @@ var TelegramBotName = ""
 var QuotaForNewUser = 0
 var QuotaForInviter = 0
 var QuotaForInvitee = 0
+
+// AffiliateRewardEnabled enables percentage-based rewards for successful
+// external top-ups made by referred users. Rewards remain pending until the
+// recipient explicitly transfers them to the main wallet.
+var AffiliateRewardEnabled = false
+
+// AffiliateRewardRatio is the percentage of the credited top-up quota paid to
+// the inviter (for example, 10 means 10%).
+var AffiliateRewardRatio = 10.0
+
+// AffiliateRewardMinTopUp is the minimum credited top-up amount in USD before
+// a referred user's top-up qualifies for a reward.
+var AffiliateRewardMinTopUp = 10.0
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false

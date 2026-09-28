@@ -55,6 +55,9 @@ const quotaSchema = z.object({
   QuotaForNewUser: z.coerce.number().min(0),
   QuotaForInviter: z.coerce.number().min(0),
   QuotaForInvitee: z.coerce.number().min(0),
+  AffiliateRewardEnabled: z.boolean(),
+  AffiliateRewardRatio: z.coerce.number().min(0).max(100),
+  AffiliateRewardMinTopUp: z.coerce.number().min(0),
   TopUpLink: z.string(),
   quota_setting: z.object({
     enable_free_model_pre_consume: z.boolean(),
@@ -229,7 +232,9 @@ export function QuotaSettingsSection({
               name='QuotaForInviter'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Inviter Reward')}</FormLabel>
+                  <FormLabel>
+                    {t('Legacy Inviter Registration Reward')}
+                  </FormLabel>
                   <FormControl>
                     <Input
                       type='number'
@@ -242,7 +247,7 @@ export function QuotaSettingsSection({
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'Quota given to users who invite others ({{formattedQuota}})',
+                      'Legacy quota granted at registration when percentage rewards are disabled ({{formattedQuota}})',
                       {
                         formattedQuota: formatQuotaInputValue(field.value),
                       }
@@ -258,7 +263,7 @@ export function QuotaSettingsSection({
               name='QuotaForInvitee'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Invitee Reward')}</FormLabel>
+                  <FormLabel>{t('Invitee First Top-Up Reward')}</FormLabel>
                   <FormControl>
                     <Input
                       type='number'
@@ -270,9 +275,97 @@ export function QuotaSettingsSection({
                     />
                   </FormControl>
                   <FormDescription>
-                    {t('Quota given to invited users ({{formattedQuota}})', {
-                      formattedQuota: formatQuotaInputValue(field.value),
-                    })}
+                    {t(
+                      'Quota granted once after an invited user reaches the first top-up threshold ({{formattedQuota}})',
+                      {
+                        formattedQuota: formatQuotaInputValue(field.value),
+                      }
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <SettingsFormGridItem span='full'>
+              <FormField
+                control={form.control}
+                name='AffiliateRewardEnabled'
+                render={({ field }) => (
+                  <SettingsSwitchItem>
+                    <SettingsSwitchContent>
+                      <FormLabel>
+                        {t('Enable Percentage Referral Rewards')}
+                      </FormLabel>
+                      <FormDescription>
+                        {t(
+                          'Invitees must complete a successful external top-up before the inviter earns a commission. Registration alone never creates a reward.'
+                        )}
+                      </FormDescription>
+                    </SettingsSwitchContent>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={updateOption.isPending}
+                      />
+                    </FormControl>
+                  </SettingsSwitchItem>
+                )}
+              />
+            </SettingsFormGridItem>
+
+            <FormField
+              control={form.control}
+              name='AffiliateRewardRatio'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Referral Commission Rate (%)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      max={100}
+                      step='0.1'
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      name={field.name}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Percentage of the credited top-up quota paid to the inviter. Recommended: 10%.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='AffiliateRewardMinTopUp'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Referral Minimum Top-Up (USD)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      step='0.01'
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      name={field.name}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'A single successful external top-up must reach this amount before it earns a referral commission.'
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
