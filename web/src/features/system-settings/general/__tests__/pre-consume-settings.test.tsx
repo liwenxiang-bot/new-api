@@ -47,6 +47,7 @@ function Fixture() {
             AffiliateRewardEnabled: false,
             AffiliateRewardRatio: 10,
             AffiliateRewardMinTopUp: 10,
+            AffiliateRewardMinTransfer: 1,
             TopUpLink: '',
             quota_setting: {
               enable_free_model_pre_consume: true,
@@ -98,6 +99,43 @@ test('enabling percentage rewards changes the invitee reward to a first-top-up b
     screen.queryByRole('spinbutton', { name: 'Invitee Reward' })
   ).not.toBeInTheDocument()
 })
+
+test.each(['0', '1.25'])(
+  'a referral transfer minimum of %s saves without enabling an invitee bonus',
+  async (value) => {
+    await renderSettings()
+    const input = screen.getByRole('spinbutton', {
+      name: 'Referral Minimum Transfer (USD)',
+    })
+    expect(input).toHaveValue(1)
+    expect(
+      screen.getByRole('spinbutton', { name: 'Invitee Reward' })
+    ).toHaveValue(0)
+    fireEvent.change(input, { target: { value } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith('/api/option/', {
+        key: 'AffiliateRewardMinTransfer',
+        value: Number(value),
+      })
+    )
+    expect(api.put).toHaveBeenCalledTimes(1)
+  }
+)
+
+test.each(['-1', '1000001'])(
+  'a referral transfer minimum of %s is rejected before saving',
+  async (value) => {
+    await renderSettings()
+    const input = screen.getByRole('spinbutton', {
+      name: 'Referral Minimum Transfer (USD)',
+    })
+    fireEvent.change(input, { target: { value } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+    await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'))
+    expect(api.put).not.toHaveBeenCalled()
+  }
+)
 
 test.each(['0.5', '1.5', '2.5', '0.0001'])(
   'typing multiplier %s preserves the decimal and saves its numeric value',

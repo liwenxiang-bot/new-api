@@ -248,6 +248,8 @@ export interface UserWalletData {
   affiliate_reward_ratio?: number
   /** Minimum qualifying top-up amount in USD */
   affiliate_reward_min_top_up?: number
+  /** Canonical minimum transfer quota; null means transfers are unavailable */
+  affiliate_reward_min_transfer_quota?: number | null
   /** Optional one-time reward for the referred user, in quota units */
   affiliate_invitee_reward?: number
   /** User group */

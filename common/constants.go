@@ -138,6 +138,10 @@ var AffiliateRewardRatio = 10.0
 // AffiliateRewardMinTopUp is the minimum credited top-up amount in USD before
 // a referred user's top-up qualifies for a reward.
 var AffiliateRewardMinTopUp = 10.0
+
+// AffiliateRewardMinTransfer is the minimum reward amount in USD that can be
+// transferred to the user's consumption balance. Zero removes the threshold.
+var AffiliateRewardMinTransfer = 1.0
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false

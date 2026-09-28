@@ -496,38 +496,45 @@ func buildSelfUserData(user *model.User) map[string]any {
 	if common.AffiliateRewardEnabled {
 		qualifiedInvites = model.GetAffiliateQualifiedInviteCount(user.Id)
 	}
+	var minimumTransferQuota *int
+	if quota, err := model.GetAffiliateMinimumTransferQuota(); err != nil {
+		common.SysError(fmt.Sprintf("affiliate reward transfer unavailable: %v", err))
+	} else {
+		minimumTransferQuota = &quota
+	}
 	return map[string]any{
-		"id":                          user.Id,
-		"username":                    user.Username,
-		"display_name":                user.DisplayName,
-		"has_password":                user.HasPassword,
-		"role":                        user.Role,
-		"status":                      user.Status,
-		"email":                       user.Email,
-		"github_id":                   user.GitHubId,
-		"discord_id":                  user.DiscordId,
-		"oidc_id":                     user.OidcId,
-		"wechat_id":                   user.WeChatId,
-		"telegram_id":                 user.TelegramId,
-		"group":                       user.Group,
-		"quota":                       user.Quota,
-		"used_quota":                  user.UsedQuota,
-		"request_count":               user.RequestCount,
-		"aff_code":                    user.AffCode,
-		"aff_count":                   user.AffCount,
-		"aff_quota":                   user.AffQuota,
-		"aff_history_quota":           user.AffHistoryQuota,
-		"inviter_id":                  user.InviterId,
-		"affiliate_reward_enabled":    common.AffiliateRewardEnabled,
-		"affiliate_reward_ratio":      common.AffiliateRewardRatio,
-		"affiliate_reward_min_top_up": common.AffiliateRewardMinTopUp,
-		"affiliate_invitee_reward":    common.QuotaForInvitee,
-		"affiliate_qualified_invites": qualifiedInvites,
-		"linux_do_id":                 user.LinuxDOId,
-		"setting":                     user.Setting,
-		"stripe_customer":             user.StripeCustomer,
-		"sidebar_modules":             userSetting.SidebarModules, // 正确提取sidebar_modules字段
-		"permissions":                 permissions,
+		"id":                                  user.Id,
+		"username":                            user.Username,
+		"display_name":                        user.DisplayName,
+		"has_password":                        user.HasPassword,
+		"role":                                user.Role,
+		"status":                              user.Status,
+		"email":                               user.Email,
+		"github_id":                           user.GitHubId,
+		"discord_id":                          user.DiscordId,
+		"oidc_id":                             user.OidcId,
+		"wechat_id":                           user.WeChatId,
+		"telegram_id":                         user.TelegramId,
+		"group":                               user.Group,
+		"quota":                               user.Quota,
+		"used_quota":                          user.UsedQuota,
+		"request_count":                       user.RequestCount,
+		"aff_code":                            user.AffCode,
+		"aff_count":                           user.AffCount,
+		"aff_quota":                           user.AffQuota,
+		"aff_history_quota":                   user.AffHistoryQuota,
+		"inviter_id":                          user.InviterId,
+		"affiliate_reward_enabled":            common.AffiliateRewardEnabled,
+		"affiliate_reward_ratio":              common.AffiliateRewardRatio,
+		"affiliate_reward_min_top_up":         common.AffiliateRewardMinTopUp,
+		"affiliate_reward_min_transfer_quota": minimumTransferQuota,
+		"affiliate_invitee_reward":            common.QuotaForInvitee,
+		"affiliate_qualified_invites":         qualifiedInvites,
+		"linux_do_id":                         user.LinuxDOId,
+		"setting":                             user.Setting,
+		"stripe_customer":                     user.StripeCustomer,
+		"sidebar_modules":                     userSetting.SidebarModules, // 正确提取sidebar_modules字段
+		"permissions":                         permissions,
 	}
 }
 

@@ -224,10 +224,19 @@ func TestAffiliateRewardDatabaseMatrix(t *testing.T) {
 	previousDB, previousLogDB := DB, LOG_DB
 	previousMainType, previousLogType := common.MainDatabaseType(), common.LogDatabaseType()
 	previousRedis, previousBatch := common.RedisEnabled, common.BatchUpdateEnabled
+	previousPolicy := requestPolicySnapshot.Load()
+	common.OptionMapRWMutex.Lock()
+	previousOptions := common.OptionMap
+	common.OptionMap = make(map[string]string)
+	common.OptionMapRWMutex.Unlock()
 	t.Cleanup(func() {
 		DB, LOG_DB = previousDB, previousLogDB
 		common.SetDatabaseTypes(previousMainType, previousLogType)
 		common.RedisEnabled, common.BatchUpdateEnabled = previousRedis, previousBatch
+		requestPolicySnapshot.Store(previousPolicy)
+		common.OptionMapRWMutex.Lock()
+		common.OptionMap = previousOptions
+		common.OptionMapRWMutex.Unlock()
 		initCol()
 	})
 	common.RedisEnabled, common.BatchUpdateEnabled = false, false
@@ -271,7 +280,8 @@ func TestAffiliateRewardDatabaseMatrix(t *testing.T) {
 
 			for _, scenario := range []string{"fresh", "upgrade"} {
 				t.Run(scenario, func(t *testing.T) {
-					models := []any{&User{}, &TopUp{}, &Log{}, &AffiliateReward{}}
+					common.AffiliateRewardMinTransfer = 1
+					models := []any{&User{}, &TopUp{}, &Log{}, &AffiliateReward{}, &Option{}}
 					for _, model := range models {
 						require.False(t, db.Migrator().HasTable(model), "use an empty dedicated test database")
 					}
@@ -281,7 +291,7 @@ func TestAffiliateRewardDatabaseMatrix(t *testing.T) {
 					// The upgrade fixture has real existing balances and a paid order,
 					// with no affiliate ledger until the new migration runs.
 					if scenario == "upgrade" {
-						require.NoError(t, db.AutoMigrate(&User{}, &TopUp{}, &Log{}))
+						require.NoError(t, db.AutoMigrate(&User{}, &TopUp{}, &Log{}, &Option{}))
 					} else {
 						require.NoError(t, db.AutoMigrate(models...))
 					}
@@ -385,6 +395,21 @@ func TestAffiliateRewardDatabaseMatrix(t *testing.T) {
 						assert.Equal(t, historyCase.total, total)
 						assert.Equal(t, historyCase.items, items, "history must paginate only the requesting inviter's commissions")
 					}
+
+					require.NoError(t, UpdateOption("AffiliateRewardMinTransfer", "2.01"))
+					var savedMinimum Option
+					require.NoError(t, db.Where(map[string]any{"key": "AffiliateRewardMinTransfer"}).First(&savedMinimum).Error)
+					assert.Equal(t, "2.01", savedMinimum.Value)
+					common.AffiliateRewardMinTransfer = 0
+					loadOptionsFromDatabase()
+					loadOptionsFromDatabase()
+					assert.Equal(t, 2.01, common.AffiliateRewardMinTransfer, "a persisted threshold must survive repeated option reloads")
+					assert.Error(t, gotInviter.TransferAffQuotaToQuota(200), "a changed threshold must apply before a transfer")
+					assert.Equal(t, gotInviter, getAffiliateRewardTestUser(t, inviter.Id), "a below-threshold transfer must leave balances unchanged")
+					require.NoError(t, UpdateOption("AffiliateRewardMinTransfer", "2"))
+					common.AffiliateRewardMinTransfer = 0
+					loadOptionsFromDatabase()
+					assert.Equal(t, 2.0, common.AffiliateRewardMinTransfer)
 
 					expected := gotInviter
 					expected.Quota += 200

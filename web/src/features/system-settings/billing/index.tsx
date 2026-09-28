@@ -31,6 +31,7 @@ const defaultBillingSettings: BillingSettings = {
   AffiliateRewardEnabled: false,
   AffiliateRewardRatio: 10,
   AffiliateRewardMinTopUp: 10,
+  AffiliateRewardMinTransfer: 1,
   TopUpLink: '',
   'quota_setting.enable_free_model_pre_consume': true,
   'quota_setting.trust_quota_usd': 10,

@@ -35,6 +35,27 @@ type AffiliateRewardResult struct {
 	InviteeQuota int
 }
 
+// GetAffiliateMinimumTransferQuota returns the current transfer threshold in
+// integral quota units. Rounding up ensures even fractional USD thresholds
+// cannot be bypassed; a transfer must remain positive when the threshold is zero.
+func GetAffiliateMinimumTransferQuota() (int, error) {
+	minimum := common.AffiliateRewardMinTransfer
+	if math.IsNaN(minimum) || math.IsInf(minimum, 0) || minimum < 0 || minimum > 1_000_000 {
+		return 0, errors.New("邀请奖励最低划转金额配置无效，请联系管理员！")
+	}
+	quotaPerUnit := common.QuotaPerUnit
+	if math.IsNaN(quotaPerUnit) || math.IsInf(quotaPerUnit, 0) || quotaPerUnit <= 0 {
+		return 0, errors.New("邀请额度单位配置无效，请联系管理员！")
+	}
+	quota, err := common.WalletQuotaFromDecimalStrict(
+		decimal.NewFromFloat(minimum).Mul(decimal.NewFromFloat(quotaPerUnit)).Ceil(),
+	)
+	if err != nil {
+		return 0, errors.New("邀请奖励最低划转额度超出有效范围，请联系管理员！")
+	}
+	return max(1, quota), nil
+}
+
 // GetAffiliateQualifiedInviteCount returns the number of distinct invitees
 // whose qualifying top-up has produced a percentage commission. Keeping this
 // in the reward ledger prevents legacy registration counts from being mixed

@@ -66,6 +66,7 @@ const BILLING_SECTIONS = [
           AffiliateRewardEnabled: settings.AffiliateRewardEnabled,
           AffiliateRewardRatio: settings.AffiliateRewardRatio,
           AffiliateRewardMinTopUp: settings.AffiliateRewardMinTopUp,
+          AffiliateRewardMinTransfer: settings.AffiliateRewardMinTransfer,
           TopUpLink: settings.TopUpLink,
           quota_setting: {
             trust_quota_usd: settings['quota_setting.trust_quota_usd'],

@@ -35,6 +35,8 @@ interface AffiliateRewardsCardProps {
   user: UserWalletData | null
   affiliateLink: string
   onTransfer: () => void
+  minimumQuota: number | null
+  refreshing?: boolean
   complianceConfirmed?: boolean
   loading?: boolean
 }
@@ -69,6 +71,15 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
   const rewardRatio = props.user?.affiliate_reward_ratio ?? 0
   const minimumTopUp = props.user?.affiliate_reward_min_top_up ?? 0
   const inviteeReward = props.user?.affiliate_invitee_reward ?? 0
+  const belowMinimum =
+    props.minimumQuota !== null &&
+    (props.user?.aff_quota ?? 0) < props.minimumQuota
+  const formattedMinimum = formatQuotaWithCurrency(props.minimumQuota, {
+    locale,
+    abbreviate: false,
+    digitsLarge: 6,
+    digitsSmall: 10,
+  })
 
   return (
     <Card data-card-hover='false' className='bg-muted/20 py-0'>
@@ -83,13 +94,31 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
             </h3>
             <p className='text-muted-foreground text-sm'>
               {percentageRewardsEnabled
-                ? t('Earn a percentage when referred users top up.')
+                ? t(
+                    'Invite friends to register through your referral link. Earn rewards when their successful top-ups meet the reward conditions.'
+                  )
                 : t(
-                    'Earn rewards when users join through your referral link. Transfer accumulated rewards to your balance anytime.'
+                    'Top-up referral rewards are currently disabled. Existing rewards can still be transferred to your balance.'
                   )}
             </p>
           </div>
         </div>
+
+        {percentageRewardsEnabled ? (
+          <div className='bg-primary/5 border-primary/20 rounded-xl border p-4 sm:p-5'>
+            <h4 className='text-muted-foreground text-sm font-medium'>
+              {t('Current commission rate')}
+            </h4>
+            <p className='text-primary mt-2 text-4xl font-bold tabular-nums sm:text-5xl'>
+              {formatNumber(rewardRatio, locale)}%
+            </p>
+            <p className='text-muted-foreground mt-3 text-sm'>
+              {t(
+                'Rewards are based on the credited top-up amount and the rate in effect when the top-up succeeds.'
+              )}
+            </p>
+          </div>
+        ) : null}
 
         <div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
           {[
@@ -136,12 +165,6 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
         {percentageRewardsEnabled ? (
           <div className='text-muted-foreground flex flex-wrap items-center gap-x-6 gap-y-2 text-sm'>
             <span>
-              {t('Commission rate')}:{' '}
-              <strong className='text-foreground'>
-                {formatNumber(rewardRatio, locale)}%
-              </strong>
-            </span>
-            <span>
               {t('Minimum qualifying top-up')}:{' '}
               <strong className='text-foreground'>
                 {formatCurrencyFromUSD(minimumTopUp, { locale })}
@@ -176,7 +199,12 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
           {hasRewards && (
             <Button
               onClick={props.onTransfer}
-              disabled={!complianceConfirmed}
+              disabled={
+                !complianceConfirmed ||
+                props.minimumQuota === null ||
+                belowMinimum ||
+                props.refreshing
+              }
               className='h-9 shrink-0 px-3'
               size='sm'
             >
@@ -184,6 +212,14 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
             </Button>
           )}
         </div>
+        <p className='text-muted-foreground text-sm'>
+          {props.minimumQuota === null
+            ? t('Referral reward transfer is currently unavailable.')
+            : `${t('Minimum transfer amount')}: ${formattedMinimum}`}
+          {belowMinimum
+            ? ` ${t('Available rewards must reach {{amount}} before you can transfer.', { amount: formattedMinimum })}`
+            : ''}
+        </p>
         <p className='text-muted-foreground text-sm'>
           {t(
             'Rewards can only be transferred to your balance. Cash withdrawal is unavailable.'

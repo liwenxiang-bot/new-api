@@ -2,6 +2,7 @@ package model
 
 import (
 	"maps"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -146,6 +147,7 @@ func InitOptionMap() {
 	common.OptionMap["AffiliateRewardEnabled"] = strconv.FormatBool(common.AffiliateRewardEnabled)
 	common.OptionMap["AffiliateRewardRatio"] = strconv.FormatFloat(common.AffiliateRewardRatio, 'f', -1, 64)
 	common.OptionMap["AffiliateRewardMinTopUp"] = strconv.FormatFloat(common.AffiliateRewardMinTopUp, 'f', -1, 64)
+	common.OptionMap["AffiliateRewardMinTransfer"] = strconv.FormatFloat(common.AffiliateRewardMinTransfer, 'f', -1, 64)
 	common.OptionMap["QuotaRemindThreshold"] = strconv.Itoa(common.QuotaRemindThreshold)
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
 	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
@@ -617,6 +619,12 @@ func updateOptionMap(key string, value string) (err error) {
 		common.AffiliateRewardRatio, _ = strconv.ParseFloat(value, 64)
 	case "AffiliateRewardMinTopUp":
 		common.AffiliateRewardMinTopUp, _ = strconv.ParseFloat(value, 64)
+	case "AffiliateRewardMinTransfer":
+		common.AffiliateRewardMinTransfer, err = strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			// Invalid persisted configuration must not silently remove the threshold.
+			common.AffiliateRewardMinTransfer = math.NaN()
+		}
 	case "QuotaRemindThreshold":
 		common.QuotaRemindThreshold, _ = strconv.Atoi(value)
 	case "PreConsumedQuota":

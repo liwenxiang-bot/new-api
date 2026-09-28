@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 
@@ -600,11 +599,12 @@ func (user *User) TransferAffQuotaToQuota(quota int) error {
 	if quota <= 0 || quota > common.MaxWalletQuota {
 		return errors.New("转移额度无效！")
 	}
-	if math.IsNaN(common.QuotaPerUnit) || math.IsInf(common.QuotaPerUnit, 0) || common.QuotaPerUnit <= 0 {
-		return errors.New("邀请额度单位配置无效！")
+	minimumQuota, err := GetAffiliateMinimumTransferQuota()
+	if err != nil {
+		return err
 	}
-	if float64(quota) < common.QuotaPerUnit {
-		return fmt.Errorf("转移额度最小为%s！", logger.LogQuota(common.QuotaFromFloat(common.QuotaPerUnit)))
+	if quota < minimumQuota {
+		return fmt.Errorf("转移额度最小为%s！", logger.LogQuota(minimumQuota))
 	}
 
 	var updated User

@@ -233,6 +233,12 @@ func UpdateOption(c *gin.Context) {
 			common.ApiErrorMsg(c, "邀请返佣最低充值金额必须在 0 到 1000000 之间")
 			return
 		}
+	case "AffiliateRewardMinTransfer":
+		minimum, err := strconv.ParseFloat(strings.TrimSpace(option.Value.(string)), 64)
+		if err != nil || math.IsNaN(minimum) || math.IsInf(minimum, 0) || minimum < 0 || minimum > 1_000_000 {
+			common.ApiErrorMsg(c, "邀请奖励最低划转金额必须在 0 到 1000000 之间")
+			return
+		}
 	default:
 		if isPaymentComplianceOptionKey(option.Key) {
 			common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")

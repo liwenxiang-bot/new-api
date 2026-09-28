@@ -122,6 +122,7 @@ func prepareAffiliateRewardTest(t *testing.T) {
 	originalEnabled := common.AffiliateRewardEnabled
 	originalRatio := common.AffiliateRewardRatio
 	originalMinimum := common.AffiliateRewardMinTopUp
+	originalMinimumTransfer := common.AffiliateRewardMinTransfer
 	originalInviterReward := common.QuotaForInviter
 	originalInviteeReward := common.QuotaForInvitee
 	originalQuotaPerUnit := common.QuotaPerUnit
@@ -131,6 +132,7 @@ func prepareAffiliateRewardTest(t *testing.T) {
 		common.AffiliateRewardEnabled = originalEnabled
 		common.AffiliateRewardRatio = originalRatio
 		common.AffiliateRewardMinTopUp = originalMinimum
+		common.AffiliateRewardMinTransfer = originalMinimumTransfer
 		common.QuotaForInviter = originalInviterReward
 		common.QuotaForInvitee = originalInviteeReward
 		common.QuotaPerUnit = originalQuotaPerUnit
@@ -140,6 +142,7 @@ func prepareAffiliateRewardTest(t *testing.T) {
 	common.AffiliateRewardEnabled = true
 	common.AffiliateRewardRatio = 10
 	common.AffiliateRewardMinTopUp = 10
+	common.AffiliateRewardMinTransfer = 1
 	common.QuotaForInvitee = 50
 	common.QuotaPerUnit = 100
 }
@@ -254,6 +257,103 @@ func TestAffiliateTransferConservesBalancesAndUpdatesCache(t *testing.T) {
 	cached, err = cacheGetUserBase(user.Id)
 	require.NoError(t, err)
 	assert.Equal(t, 500, cached.Quota)
+}
+
+func TestAffiliateTransferUsesConfiguredMinimum(t *testing.T) {
+	originalOptions := common.OptionMap
+	common.OptionMap = make(map[string]string)
+	t.Cleanup(func() { common.OptionMap = originalOptions })
+	for _, tc := range []struct {
+		name        string
+		configured  string
+		quotaUnit   float64
+		amount      int
+		wantMinimum int
+		wantErr     bool
+		invalid     bool
+		parseErr    bool
+	}{
+		{name: "default exact threshold", configured: "1", amount: 100, wantMinimum: 100},
+		{name: "raised threshold", configured: "2", amount: 100, wantMinimum: 200, wantErr: true},
+		{name: "raised exact threshold", configured: "2", amount: 200, wantMinimum: 200},
+		{name: "lowered threshold", configured: "0.5", amount: 50, wantMinimum: 50},
+		{name: "fraction rounds up", configured: "1.0001", amount: 100, wantMinimum: 101, wantErr: true},
+		{name: "fraction exact quota threshold", configured: "1.0001", amount: 101, wantMinimum: 101},
+		{name: "no threshold", configured: "0", amount: 1, wantMinimum: 1},
+		{name: "no threshold still rejects zero", configured: "0", amount: 0, wantMinimum: 1, wantErr: true},
+		{name: "maximum setting", configured: "1000000", amount: 100, wantMinimum: 100000000, wantErr: true},
+		{name: "quota conversion overflow", configured: "1", quotaUnit: math.MaxFloat64, amount: 100, invalid: true, wantErr: true},
+		{name: "negative setting", configured: "-1", amount: 100, invalid: true, wantErr: true},
+		{name: "above maximum setting", configured: "1000001", amount: 100, invalid: true, wantErr: true},
+		{name: "NaN setting", configured: "NaN", amount: 100, invalid: true, wantErr: true},
+		{name: "infinite setting", configured: "+Inf", amount: 100, invalid: true, wantErr: true},
+		{name: "malformed persisted setting", configured: "invalid", amount: 100, invalid: true, parseErr: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			truncateTables(t)
+			prepareAffiliateRewardTest(t)
+			if tc.quotaUnit > 0 {
+				common.QuotaPerUnit = tc.quotaUnit
+			}
+			user := createAffiliateRewardTestUser(t, 632, "affiliate-min-transfer", 0)
+			require.NoError(t, DB.Model(user).Updates(map[string]any{"quota": 50, "aff_quota": 400, "aff_history": 700}).Error)
+			err := updateOptionMap("AffiliateRewardMinTransfer", tc.configured)
+			if tc.parseErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			minimum, err := GetAffiliateMinimumTransferQuota()
+			if tc.invalid {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantMinimum, minimum)
+			}
+			err = user.TransferAffQuotaToQuota(tc.amount)
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			stored := getAffiliateRewardTestUser(t, user.Id)
+			if tc.wantErr {
+				assert.Equal(t, 50, stored.Quota)
+				assert.Equal(t, 400, stored.AffQuota)
+			} else {
+				assert.Equal(t, 50+tc.amount, stored.Quota)
+				assert.Equal(t, 400-tc.amount, stored.AffQuota)
+			}
+			assert.Equal(t, 700, stored.AffHistoryQuota)
+		})
+	}
+}
+
+func TestAffiliateRateChangePreservesAccruedRewards(t *testing.T) {
+	truncateTables(t)
+	prepareAffiliateRewardTest(t)
+	common.QuotaForInvitee = 0
+	inviter := createAffiliateRewardTestUser(t, 633, "affiliate-rate-inviter", 0)
+	invitee := createAffiliateRewardTestUser(t, 634, "affiliate-rate-invitee", inviter.Id)
+	first := createAffiliateRewardTestTopUp(t, invitee.Id, "AFFILIATE-RATE-ORIGINAL", PaymentProviderEpay, 20)
+	_, err := RechargeEpay(first.TradeNo, "alipay", "127.0.0.1")
+	require.NoError(t, err)
+	common.AffiliateRewardRatio = 5
+	second := createAffiliateRewardTestTopUp(t, invitee.Id, "AFFILIATE-RATE-CHANGED", PaymentProviderEpay, 20)
+	_, err = RechargeEpay(second.TradeNo, "alipay", "127.0.0.1")
+	require.NoError(t, err)
+	items, total, err := GetAffiliateRewardHistory(inviter.Id, 0, 10)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, total)
+	require.Len(t, items, 2)
+	assert.Equal(t, 100, items[0].Quota)
+	assert.Equal(t, 200, items[1].Quota, "previous commissions keep the rate at payment completion")
+	common.AffiliateRewardRatio = 0
+	require.NoError(t, inviter.TransferAffQuotaToQuota(300))
+	stored := getAffiliateRewardTestUser(t, inviter.Id)
+	assert.Equal(t, 300, stored.Quota, "transfer keeps all accrued rewards after rate changes")
+	assert.Zero(t, stored.AffQuota)
+	assert.Equal(t, 300, stored.AffHistoryQuota)
 }
 
 func TestAffiliateTransferEnforcesWalletLimit(t *testing.T) {

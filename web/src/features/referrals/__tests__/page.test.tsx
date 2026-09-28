@@ -66,6 +66,7 @@ beforeEach(() => {
     affiliate_reward_enabled: true,
     affiliate_reward_ratio: 10,
     affiliate_reward_min_top_up: 10,
+    affiliate_reward_min_transfer_quota: 500000,
     affiliate_invitee_reward: 0,
   }
   vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
@@ -236,6 +237,83 @@ test('a failed transfer keeps the dialog open and preserves the entered amount',
   expect(
     within(dialog).getByRole('spinbutton', { name: 'Transfer Amount' })
   ).toHaveValue(1)
+})
+
+test('opening transfer refreshes the current rate and uses the latest fractional minimum', async () => {
+  const user = userEvent.setup()
+  await renderPage()
+  const transfer = await screen.findByRole('button', {
+    name: 'Transfer to Balance',
+  })
+  userData.affiliate_reward_ratio = 7.5
+  userData.affiliate_reward_min_transfer_quota = 625000
+  await user.click(transfer)
+  const dialog = await screen.findByRole('dialog', { name: 'Transfer Rewards' })
+  const amount = within(dialog).getByRole('spinbutton', {
+    name: 'Transfer Amount',
+  })
+  expect(amount).toHaveValue(1.25)
+  expect(screen.getByText('7.5%')).toBeInTheDocument()
+  await user.clear(amount)
+  await user.type(amount, '1.3')
+  expect(amount).toBeValid()
+  await user.click(within(dialog).getByRole('button', { name: 'Transfer' }))
+  await waitFor(() =>
+    expect(api.post).toHaveBeenCalledWith('/api/user/aff_transfer', {
+      quota: 650000,
+    })
+  )
+})
+
+test('a one-quota minimum remains readable and can be transferred', async () => {
+  userData.affiliate_reward_min_transfer_quota = 1
+  const user = userEvent.setup()
+  await renderPage()
+  expect(
+    await screen.findByText('Minimum transfer amount: $0.000002')
+  ).toBeVisible()
+  await user.click(
+    await screen.findByRole('button', { name: 'Transfer to Balance' })
+  )
+  const dialog = await screen.findByRole('dialog', { name: 'Transfer Rewards' })
+  const amount = within(dialog).getByRole('spinbutton', {
+    name: 'Transfer Amount',
+  })
+  expect(amount).toHaveValue(0.000002)
+  expect(amount).toBeValid()
+  expect(
+    within(dialog).getByText('Minimum transfer amount: $0.000002')
+  ).toBeVisible()
+  await user.click(within(dialog).getByRole('button', { name: 'Transfer' }))
+  await waitFor(() =>
+    expect(api.post).toHaveBeenCalledWith('/api/user/aff_transfer', {
+      quota: 1,
+    })
+  )
+})
+
+test('an older server without a transfer minimum uses the previous one-dollar minimum', async () => {
+  delete userData.affiliate_reward_min_transfer_quota
+  const user = userEvent.setup()
+  await renderPage()
+  await user.click(
+    await screen.findByRole('button', { name: 'Transfer to Balance' })
+  )
+  const dialog = await screen.findByRole('dialog', { name: 'Transfer Rewards' })
+  expect(
+    within(dialog).getByRole('spinbutton', { name: 'Transfer Amount' })
+  ).toHaveValue(1)
+})
+
+test('an unavailable transfer minimum cannot fall back to the previous threshold', async () => {
+  userData.affiliate_reward_min_transfer_quota = null
+  await renderPage()
+  expect(
+    await screen.findByRole('button', { name: 'Transfer to Balance' })
+  ).toBeDisabled()
+  expect(
+    screen.getByText('Referral reward transfer is currently unavailable.')
+  ).toBeVisible()
 })
 
 test('unconfirmed compliance disables transferring rewards', async () => {

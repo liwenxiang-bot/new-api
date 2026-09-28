@@ -58,6 +58,7 @@ const quotaSchema = z.object({
   AffiliateRewardEnabled: z.boolean(),
   AffiliateRewardRatio: z.coerce.number().min(0).max(100),
   AffiliateRewardMinTopUp: z.coerce.number().min(0),
+  AffiliateRewardMinTransfer: z.coerce.number().min(0).max(1000000),
   TopUpLink: z.string(),
   quota_setting: z.object({
     enable_free_model_pre_consume: z.boolean(),
@@ -376,6 +377,35 @@ export function QuotaSettingsSection({
                   <FormDescription>
                     {t(
                       'A single successful external top-up must reach this amount before it earns a referral commission.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='AffiliateRewardMinTransfer'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Referral Minimum Transfer (USD)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      max={1000000}
+                      step='any'
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      name={field.name}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Minimum reward amount per transfer to the account balance. Set to 0 to allow any positive amount.'
                     )}
                   </FormDescription>
                   <FormMessage />

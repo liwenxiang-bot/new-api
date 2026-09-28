@@ -73,6 +73,7 @@ describe('affiliate rewards card', () => {
       render(
         <I18nextProvider i18n={i18n}>
           <AffiliateRewardsCard
+            minimumQuota={100}
             user={userData({ affiliate_qualified_invites: 12345 })}
             affiliateLink='https://example.com/register?aff=alice'
             onTransfer={vi.fn()}
@@ -90,6 +91,7 @@ describe('affiliate rewards card', () => {
   test('shows the percentage, threshold, and balance-only policy', () => {
     render(
       <AffiliateRewardsCard
+        minimumQuota={100}
         user={userData()}
         affiliateLink='https://example.com/register?aff=alice'
         onTransfer={vi.fn()}
@@ -103,6 +105,66 @@ describe('affiliate rewards card', () => {
       screen.getByText(/Rewards can only be transferred to your balance/)
     ).toBeVisible()
     expect(screen.getByText('Qualified Invites')).toBeVisible()
+    expect(
+      screen.getByText(/Invite friends to register through your referral link/)
+    ).toBeVisible()
+    expect(
+      screen.getByRole('heading', { name: 'Current commission rate' })
+    ).toBeVisible()
+    expect(screen.getByText(/Minimum transfer amount/)).toBeVisible()
+  })
+
+  test('displays the latest server rate when the summary changes', () => {
+    const props = {
+      affiliateLink: 'https://example.com/register?aff=alice',
+      minimumQuota: 100,
+      onTransfer: vi.fn(),
+    }
+    const view = render(<AffiliateRewardsCard {...props} user={userData()} />)
+    expect(screen.getByText('10%')).toBeVisible()
+    view.rerender(
+      <AffiliateRewardsCard
+        {...props}
+        user={userData({ affiliate_reward_ratio: 7.5 })}
+      />
+    )
+    expect(screen.getByText('7.5%')).toBeVisible()
+    expect(screen.queryByText('10%')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/rate in effect when the top-up succeeds/)
+    ).toBeVisible()
+  })
+
+  test('disables transfers below the minimum and explains the threshold', () => {
+    render(
+      <AffiliateRewardsCard
+        minimumQuota={1000}
+        user={userData()}
+        affiliateLink='https://example.com/register?aff=alice'
+        onTransfer={vi.fn()}
+      />
+    )
+    expect(
+      screen.getByRole('button', { name: 'Transfer to Balance' })
+    ).toBeDisabled()
+    expect(screen.getByText(/Available rewards must reach/)).toBeVisible()
+  })
+
+  test('disables transfers when the server marks the minimum unavailable', () => {
+    render(
+      <AffiliateRewardsCard
+        minimumQuota={null}
+        user={userData()}
+        affiliateLink='https://example.com/register?aff=alice'
+        onTransfer={vi.fn()}
+      />
+    )
+    expect(
+      screen.getByRole('button', { name: 'Transfer to Balance' })
+    ).toBeDisabled()
+    expect(
+      screen.getByText('Referral reward transfer is currently unavailable.')
+    ).toBeVisible()
   })
 
   test('copies the invitation link and exposes the balance transfer action', async () => {
@@ -114,6 +176,7 @@ describe('affiliate rewards card', () => {
 
     render(
       <AffiliateRewardsCard
+        minimumQuota={100}
         user={userData()}
         affiliateLink='https://example.com/register?aff=alice'
         onTransfer={onTransfer}
@@ -139,6 +202,7 @@ describe('affiliate rewards card', () => {
   test('disables transfer while payment compliance is unconfirmed', () => {
     render(
       <AffiliateRewardsCard
+        minimumQuota={100}
         user={userData()}
         affiliateLink='https://example.com/register?aff=alice'
         complianceConfirmed={false}
@@ -153,6 +217,7 @@ describe('affiliate rewards card', () => {
   test('keeps legacy invitation counts distinct from qualified top-ups', () => {
     render(
       <AffiliateRewardsCard
+        minimumQuota={100}
         user={userData({ affiliate_reward_enabled: false })}
         affiliateLink='https://example.com/register?aff=alice'
         onTransfer={vi.fn()}
@@ -161,11 +226,18 @@ describe('affiliate rewards card', () => {
     expect(screen.getByText('Invited Users')).toBeVisible()
     expect(screen.queryByText('Qualified Invites')).not.toBeInTheDocument()
     expect(screen.queryByText('Commission rate')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/Top-up referral rewards are currently disabled/)
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Transfer to Balance' })
+    ).toBeEnabled()
   })
 
   test('hides transfer when no rewards are available', () => {
     render(
       <AffiliateRewardsCard
+        minimumQuota={100}
         user={userData({ aff_quota: 0 })}
         affiliateLink='https://example.com/register?aff=alice'
         onTransfer={vi.fn()}

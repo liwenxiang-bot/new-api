@@ -33,6 +33,10 @@ import {
   createServerError,
   requireServerSuccess,
 } from '@/lib/server-error-message'
+import {
+  DEFAULT_CURRENCY_CONFIG,
+  useSystemConfigStore,
+} from '@/stores/system-config-store'
 
 import { RewardsHistory } from './components/rewards-history'
 
@@ -40,8 +44,12 @@ export function Referrals() {
   const { t } = useTranslation()
   const [transferOpen, setTransferOpen] = useState(false)
   const affiliate = useAffiliate()
+  const currencyConfig = useSystemConfigStore((state) => state.config.currency)
   const summaryQuery = useQuery({
     queryKey: ['referrals', 'summary'],
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
     queryFn: async () => {
       const [profile, topup] = await Promise.all([getSelf(), getTopupInfo()])
       const userResponse = requireServerSuccess(
@@ -62,6 +70,17 @@ export function Referrals() {
   })
   const loading = summaryQuery.isPending || affiliate.loading
   const summary = summaryQuery.data
+  let minimumQuota = summary?.user.affiliate_reward_min_transfer_quota
+  if (minimumQuota === undefined) {
+    minimumQuota = Math.ceil(
+      currencyConfig.quotaPerUnit > 0
+        ? currencyConfig.quotaPerUnit
+        : DEFAULT_CURRENCY_CONFIG.quotaPerUnit
+    )
+  }
+  if (!Number.isSafeInteger(minimumQuota) || (minimumQuota ?? 0) < 1) {
+    minimumQuota = null
+  }
   const unavailable =
     summaryQuery.isError || !summary || !affiliate.affiliateLink
 
@@ -93,7 +112,12 @@ export function Referrals() {
         <AffiliateRewardsCard
           user={summary.user}
           affiliateLink={affiliate.affiliateLink}
-          onTransfer={() => setTransferOpen(true)}
+          onTransfer={async () => {
+            const latest = await summaryQuery.refetch()
+            if (!latest.isError) setTransferOpen(true)
+          }}
+          minimumQuota={minimumQuota}
+          refreshing={summaryQuery.isFetching}
           complianceConfirmed={summary.complianceConfirmed}
         />
         <TransferDialog
@@ -101,6 +125,7 @@ export function Referrals() {
           onOpenChange={setTransferOpen}
           onConfirm={handleTransfer}
           availableQuota={summary.user.aff_quota}
+          minimumQuota={minimumQuota}
           transferring={affiliate.transferring}
         />
       </>
