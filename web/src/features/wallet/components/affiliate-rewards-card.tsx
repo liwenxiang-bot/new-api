@@ -94,7 +94,7 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
         <div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
           {[
             [
-              t('Pending'),
+              t('Available Rewards'),
               formatQuotaWithCurrency(
                 props.user?.aff_quota ?? 0,
                 currencyOptions

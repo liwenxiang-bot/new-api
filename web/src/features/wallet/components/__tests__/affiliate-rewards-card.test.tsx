@@ -97,6 +97,7 @@ describe('affiliate rewards card', () => {
     )
 
     expect(screen.getByText('10%')).toBeVisible()
+    expect(screen.getByText('Available Rewards')).toBeVisible()
     expect(screen.getByText(/Minimum qualifying top-up/)).toBeVisible()
     expect(
       screen.getByText(/Rewards can only be transferred to your balance/)
