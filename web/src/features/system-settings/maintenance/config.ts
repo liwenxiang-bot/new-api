@@ -72,6 +72,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     enabled: true,
     topup: true,
     referrals: true,
+    invoices: true,
     personal: true,
     security: true,
   },
@@ -83,6 +84,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     user: true,
     setting: true,
     subscription: true,
+    invoices: true,
   },
 }
 

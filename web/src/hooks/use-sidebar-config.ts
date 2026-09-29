@@ -55,6 +55,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     enabled: true,
     topup: true,
     referrals: true,
+    invoices: true,
     personal: true,
     security: true,
   },
@@ -66,6 +67,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     user: true,
     setting: true,
     subscription: true,
+    invoices: true,
   },
 }
 
@@ -111,6 +113,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/usage-logs/task': { section: 'console', module: 'task' },
   '/wallet': { section: 'personal', module: 'topup' },
   '/referrals': { section: 'personal', module: 'referrals' },
+  '/invoices': { section: 'personal', module: 'invoices' },
   '/profile': { section: 'personal', module: 'personal' },
   '/security': { section: 'personal', module: 'security' },
   '/channels': { section: 'admin', module: 'channel' },
@@ -120,6 +123,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/users': { section: 'admin', module: 'user' },
   '/redemption-codes': { section: 'admin', module: 'redemption' },
   '/subscriptions': { section: 'admin', module: 'subscription' },
+  '/invoice-management': { section: 'admin', module: 'invoices' },
   '/system-settings': { section: 'admin', module: 'setting' },
   '/system-settings/site': { section: 'admin', module: 'setting' },
 }
@@ -282,13 +286,16 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
   const { status } = useStatus()
   const { auth } = useAuthStore()
 
-  const adminConfig = useMemo(
-    () =>
-      parseSidebarConfig(
-        status?.SidebarModulesAdmin as string | null | undefined
-      ),
-    [status?.SidebarModulesAdmin]
-  )
+  const adminConfig = useMemo(() => {
+    const config = parseSidebarConfig(
+      status?.SidebarModulesAdmin as string | null | undefined
+    )
+    if (status?.invoice_enabled === true) return config
+    return {
+      ...config,
+      personal: { ...config.personal, invoices: false },
+    }
+  }, [status?.SidebarModulesAdmin, status?.invoice_enabled])
 
   const userConfig = useMemo(() => {
     // If the backend marks the user as unable to configure the sidebar
@@ -333,5 +340,6 @@ export function useIsSidebarModuleVisible(url: string): boolean {
       ? null
       : parseUserSidebarConfig(auth?.user?.sidebar_modules)
 
+  if (url === '/invoices' && status?.invoice_enabled !== true) return false
   return isModuleEnabled(url, adminConfig, userConfig)
 }

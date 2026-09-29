@@ -25,6 +25,7 @@ import { PaymentSettingsSection } from '../integrations/payment-settings-section
 import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { InvoiceSettingsSection } from './invoice-settings-section'
 
 const getModelDefaults = (settings: BillingSettings) => ({
   ModelPrice: settings.ModelPrice,
@@ -188,6 +189,18 @@ const BILLING_SECTIONS = [
             settings['payment_setting.compliance_terms_version'] ?? '',
           confirmedAt: settings['payment_setting.compliance_confirmed_at'] ?? 0,
           confirmedBy: settings['payment_setting.compliance_confirmed_by'] ?? 0,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'invoices',
+    titleKey: 'Invoice settings',
+    build: (settings: BillingSettings) => (
+      <InvoiceSettingsSection
+        defaultValues={{
+          enabled: settings['invoice_setting.enabled'],
+          minAmountMinor: settings['invoice_setting.min_amount_minor'],
         }}
       />
     ),

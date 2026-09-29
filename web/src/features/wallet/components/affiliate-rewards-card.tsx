@@ -17,9 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Share2 } from 'lucide-react'
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { IconBadge } from '@/components/ui/icon-badge'
@@ -43,6 +45,8 @@ interface AffiliateRewardsCardProps {
 
 export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
   const { t, i18n } = useTranslation()
+  const linkId = useId()
+  const transferHintId = useId()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const currencyOptions = {
     locale,
@@ -82,17 +86,14 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
   })
 
   return (
-    <Card data-card-hover='false' className='bg-muted/20 py-0'>
-      <CardContent className='grid min-w-0 gap-6 p-4 sm:p-6'>
-        <div className='flex min-w-0 items-center gap-2.5'>
-          <IconBadge tone='chart-3'>
-            <Share2 />
-          </IconBadge>
-          <div className='min-w-0'>
-            <h3 className='truncate text-sm font-semibold'>
-              {t('Referral Rewards')}
-            </h3>
-            <p className='text-muted-foreground text-sm'>
+    <Card data-card-hover='false' className='py-0'>
+      <CardContent className='grid min-w-0 gap-5 p-4 sm:p-5'>
+        <div className='flex min-w-0 flex-col items-start justify-between gap-3 lg:flex-row lg:gap-6'>
+          <div className='flex min-w-0 items-start gap-2.5'>
+            <IconBadge tone='chart-3'>
+              <Share2 aria-hidden='true' />
+            </IconBadge>
+            <p className='text-muted-foreground max-w-2xl text-sm leading-6'>
               {percentageRewardsEnabled
                 ? t(
                     'Invite friends to register through your referral link. Earn rewards when their successful top-ups meet the reward conditions.'
@@ -102,139 +103,153 @@ export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
                   )}
             </p>
           </div>
-        </div>
-
-        {percentageRewardsEnabled ? (
-          <div className='bg-primary/5 border-primary/20 rounded-xl border p-4 sm:p-5'>
-            <h4 className='text-muted-foreground text-sm font-medium'>
-              {t('Current commission rate')}
-            </h4>
-            <p className='text-primary mt-2 text-4xl font-bold tabular-nums sm:text-5xl'>
-              {formatNumber(rewardRatio, locale)}%
-            </p>
-            <p className='text-muted-foreground mt-3 text-sm'>
-              {t(
-                'Rewards are based on the credited top-up amount and the rate in effect when the top-up succeeds.'
-              )}
-            </p>
-          </div>
-        ) : null}
-
-        <div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
-          {[
-            [
-              t('Available Rewards'),
-              formatQuotaWithCurrency(
-                props.user?.aff_quota ?? 0,
-                currencyOptions
-              ),
-            ],
-            [
-              t('Total Earned'),
-              formatQuotaWithCurrency(
-                props.user?.aff_history_quota ?? 0,
-                currencyOptions
-              ),
-            ],
-            [
-              percentageRewardsEnabled
-                ? t('Qualified Invites')
-                : t('Invited Users'),
-              formatNumber(
-                percentageRewardsEnabled
-                  ? (props.user?.affiliate_qualified_invites ?? 0)
-                  : (props.user?.aff_count ?? 0),
-                locale
-              ),
-            ],
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              className='bg-background/70 min-w-0 rounded-xl border p-4'
+          {percentageRewardsEnabled ? (
+            <Badge
+              variant='outline'
+              className='bg-primary/5 h-auto max-w-full flex-wrap gap-x-2 gap-y-0.5 px-3 py-1.5 whitespace-normal'
             >
-              <div className='text-muted-foreground text-xs font-medium'>
-                {label}
-              </div>
-              <div className='mt-2 text-2xl font-semibold break-all tabular-nums'>
-                {value}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {percentageRewardsEnabled ? (
-          <div className='text-muted-foreground flex flex-wrap items-center gap-x-6 gap-y-2 text-sm'>
-            <span>
-              {t('Minimum qualifying top-up')}:{' '}
-              <strong className='text-foreground'>
-                {formatCurrencyFromUSD(minimumTopUp, { locale })}
-              </strong>
-            </span>
-            {inviteeReward > 0 ? (
-              <span>
-                {t('Invitee reward')}:{' '}
-                <strong className='text-foreground'>
-                  {formatQuotaWithCurrency(inviteeReward, currencyOptions)}
-                </strong>
+              <span className='text-muted-foreground'>
+                {t('Current commission rate')}
               </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className='flex min-w-0 flex-wrap items-center gap-2'>
-          <Input
-            value={props.affiliateLink}
-            readOnly
-            aria-label={t('Referral link:')}
-            className='border-muted bg-background/70 h-10 min-w-0 flex-1 basis-48 font-mono text-xs'
-          />
-          <CopyButton
-            value={props.affiliateLink}
-            variant='outline'
-            className='bg-background size-9 shrink-0'
-            iconClassName='size-4'
-            tooltip={t('Copy referral link')}
-            aria-label={t('Copy referral link')}
-          />
-          {hasRewards && (
-            <Button
-              onClick={props.onTransfer}
-              disabled={
-                !complianceConfirmed ||
-                props.minimumQuota === null ||
-                belowMinimum ||
-                props.refreshing
-              }
-              className='h-9 shrink-0 px-3'
-              size='sm'
-            >
-              {t('Transfer to Balance')}
-            </Button>
-          )}
+              <span className='text-primary text-base font-semibold tabular-nums'>
+                {formatNumber(rewardRatio, locale)}%
+              </span>
+            </Badge>
+          ) : null}
         </div>
-        <p className='text-muted-foreground text-sm'>
-          {props.minimumQuota === null
-            ? t('Referral reward transfer is currently unavailable.')
-            : `${t('Minimum transfer amount')}: ${formattedMinimum}`}
-          {belowMinimum
-            ? ` ${t('Available rewards must reach {{amount}} before you can transfer.', { amount: formattedMinimum })}`
-            : ''}
-        </p>
-        <p className='text-muted-foreground text-sm'>
-          {t(
-            'Rewards can only be transferred to your balance. Cash withdrawal is unavailable.'
-          )}
-          {percentageRewardsEnabled
-            ? ` ${t('Registration alone never creates a reward.')}`
-            : ''}
-        </p>
-        {!complianceConfirmed ? (
-          <p className='text-muted-foreground text-sm'>
+
+        <div className='bg-muted/30 rounded-lg'>
+          <dl className='grid min-w-0 grid-cols-2 sm:grid-cols-3'>
+            <div className='col-span-2 min-w-0 border-b p-4 sm:col-span-1 sm:border-r sm:border-b-0'>
+              <dt className='text-muted-foreground text-xs font-medium'>
+                {t('Available Rewards')}
+              </dt>
+              <dd className='mt-2 flex flex-wrap items-center gap-x-4 gap-y-2'>
+                <span className='text-2xl font-semibold break-all tabular-nums'>
+                  {formatQuotaWithCurrency(
+                    props.user?.aff_quota ?? 0,
+                    currencyOptions
+                  )}
+                </span>
+                {hasRewards ? (
+                  <Button
+                    onClick={props.onTransfer}
+                    disabled={
+                      !complianceConfirmed ||
+                      props.minimumQuota === null ||
+                      belowMinimum ||
+                      props.refreshing
+                    }
+                    aria-describedby={transferHintId}
+                    variant='outline'
+                    size='sm'
+                  >
+                    {t('Transfer to Balance')}
+                  </Button>
+                ) : null}
+              </dd>
+            </div>
+            {[
+              [
+                t('Total Earned'),
+                formatQuotaWithCurrency(
+                  props.user?.aff_history_quota ?? 0,
+                  currencyOptions
+                ),
+              ],
+              [
+                percentageRewardsEnabled
+                  ? t('Qualified Invites')
+                  : t('Invited Users'),
+                formatNumber(
+                  percentageRewardsEnabled
+                    ? (props.user?.affiliate_qualified_invites ?? 0)
+                    : (props.user?.aff_count ?? 0),
+                  locale
+                ),
+              ],
+            ].map(([label, value]) => (
+              <div key={label} className='min-w-0 p-4 last:border-l'>
+                <dt className='text-muted-foreground text-xs font-medium'>
+                  {label}
+                </dt>
+                <dd className='mt-2 text-2xl font-semibold break-all tabular-nums'>
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p
+            id={transferHintId}
+            className='text-muted-foreground border-t px-4 py-2.5 text-xs leading-5'
+          >
+            {props.minimumQuota === null
+              ? t('Referral reward transfer is currently unavailable.')
+              : `${t('Minimum transfer amount')}: ${formattedMinimum}`}
+            {!complianceConfirmed
+              ? ` · ${t('Referral reward transfer is disabled until the administrator confirms compliance terms.')}`
+              : ''}
+          </p>
+        </div>
+
+        <div className='min-w-0 space-y-2'>
+          <label htmlFor={linkId} className='text-sm font-medium'>
+            {t('Referral link:')}
+          </label>
+          <div className='flex min-w-0 flex-col gap-2 sm:flex-row'>
+            <Input
+              id={linkId}
+              value={props.affiliateLink}
+              readOnly
+              className='bg-muted/20 h-9 min-w-0 flex-1 font-mono text-xs'
+            />
+            <CopyButton
+              value={props.affiliateLink}
+              variant='default'
+              size='default'
+              className='h-9'
+              iconClassName='size-4'
+              tooltip={t('Copy referral link')}
+              aria-label={t('Copy referral link')}
+            >
+              {t('Copy referral link')}
+            </CopyButton>
+          </div>
+        </div>
+
+        <div className='text-muted-foreground space-y-1.5 border-t pt-4 text-xs leading-5'>
+          {percentageRewardsEnabled ? (
+            <>
+              <div className='flex flex-wrap gap-x-5 gap-y-1.5'>
+                <span>
+                  {t('Minimum qualifying top-up')}:{' '}
+                  <span className='text-foreground font-medium'>
+                    {formatCurrencyFromUSD(minimumTopUp, { locale })}
+                  </span>
+                </span>
+                {inviteeReward > 0 ? (
+                  <span>
+                    {t('Invitee reward')}:{' '}
+                    <span className='text-foreground font-medium'>
+                      {formatQuotaWithCurrency(inviteeReward, currencyOptions)}
+                    </span>
+                  </span>
+                ) : null}
+              </div>
+              <p>
+                {t(
+                  'Rewards are based on the credited top-up amount and the rate in effect when the top-up succeeds.'
+                )}{' '}
+                {t('Registration alone never creates a reward.')}
+              </p>
+            </>
+          ) : null}
+          <p>
             {t(
-              'Referral reward transfer is disabled until the administrator confirms compliance terms.'
+              'Rewards can only be transferred to your balance. Cash withdrawal is unavailable.'
             )}
           </p>
-        ) : null}
+        </div>
       </CardContent>
     </Card>
   )

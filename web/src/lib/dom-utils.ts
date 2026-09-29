@@ -16,6 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { DEFAULT_SYSTEM_NAME } from '@/lib/constants'
+
+/** Prefer the name from this HTML response over a possibly stale browser cache. */
+export function getInitialSystemName(fallback?: string): string {
+  const serverName =
+    typeof document === 'undefined'
+      ? undefined
+      : document
+          .querySelector<HTMLMetaElement>('meta[name="application-name"]')
+          ?.content.trim()
+  return serverName || fallback || DEFAULT_SYSTEM_NAME
+}
+
 export function applyFaviconToDom(url: string) {
   if (typeof document === 'undefined' || !url) return
   try {

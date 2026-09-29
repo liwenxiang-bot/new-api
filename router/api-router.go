@@ -196,6 +196,26 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionAdminRoute.DELETE("/user_subscriptions/:id", controller.AdminDeleteUserSubscription)
 		}
 
+		invoiceRoute := apiRouter.Group("/invoice")
+		invoiceRoute.Use(middleware.DisableCache())
+		{
+			invoiceSelf := invoiceRoute.Group("")
+			invoiceSelf.Use(middleware.UserAuth())
+			invoiceSelf.GET("/eligible", controller.GetInvoiceEligibleTopUps)
+			invoiceSelf.GET("/self", controller.GetUserInvoices)
+			invoiceSelf.POST("/self", middleware.UserCriticalRateLimit("invoice-apply"), controller.CreateInvoice)
+			invoiceSelf.GET("/self/:id", controller.GetUserInvoice)
+			invoiceSelf.GET("/self/:id/file", controller.DownloadUserInvoice)
+
+			invoiceAdmin := invoiceRoute.Group("/admin")
+			invoiceAdmin.Use(middleware.AdminAuth())
+			invoiceAdmin.GET("", controller.GetAdminInvoices)
+			invoiceAdmin.GET("/:id", controller.GetAdminInvoice)
+			invoiceAdmin.POST("/:id/review", middleware.UserCriticalRateLimit("invoice-review"), controller.ReviewInvoice)
+			invoiceAdmin.POST("/:id/issue", middleware.UserCriticalRateLimit("invoice-issue"), controller.IssueInvoice)
+			invoiceAdmin.GET("/:id/file", controller.DownloadAdminInvoice)
+		}
+
 		// Subscription payment callbacks (no auth)
 		apiRouter.POST("/subscription/epay/notify", anonymousRequestBodyLimit, controller.SubscriptionEpayNotify)
 		apiRouter.GET("/subscription/epay/notify", controller.SubscriptionEpayNotify)

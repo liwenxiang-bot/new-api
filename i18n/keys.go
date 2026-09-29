@@ -2,6 +2,18 @@ package i18n
 
 const MsgTaskPluginUnknownMetaField = "task_plugin.unknown_meta_field"
 
+const (
+	MsgInvoiceFailed          = "invoice.failed"
+	MsgInvoiceDisabled        = "invoice.disabled"
+	MsgInvoiceBelowMinimum    = "invoice.below_minimum"
+	MsgInvoiceInvalidInput    = "invoice.invalid_input"
+	MsgInvoiceIneligible      = "invoice.ineligible"
+	MsgInvoiceNotFound        = "invoice.not_found"
+	MsgInvoiceConflict        = "invoice.conflict"
+	MsgInvoiceRequestTooLarge = "invoice.request_too_large"
+	MsgInvoiceFileTooLarge    = "invoice.file_too_large"
+)
+
 // Message keys for i18n translations
 // Use these constants instead of hardcoded strings
 

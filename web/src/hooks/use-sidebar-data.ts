@@ -30,6 +30,7 @@ import {
   MessageSquare,
   PlugZap,
   Radio,
+  ReceiptText,
   ServerCog,
   Settings,
   ShieldCheck,
@@ -123,6 +124,11 @@ export function useSidebarData(): SidebarData {
             icon: Gift,
           },
           {
+            title: t('Invoices'),
+            url: '/invoices',
+            icon: ReceiptText,
+          },
+          {
             title: t('Profile'),
             url: '/profile',
             icon: User,
@@ -162,6 +168,12 @@ export function useSidebarData(): SidebarData {
             title: t('Subscriptions'),
             url: '/subscriptions',
             icon: CreditCard,
+          },
+          {
+            title: t('Invoice management'),
+            url: '/invoice-management',
+            icon: ReceiptText,
+            requiredRole: ROLE.ADMIN,
           },
           {
             title: t('System Info'),

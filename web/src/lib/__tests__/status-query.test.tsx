@@ -17,10 +17,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
+import { SystemBrand } from '@/components/layout/components/system-brand'
+import { SidebarProvider } from '@/components/ui/sidebar'
 import { useStatus } from '@/hooks/use-status'
 import { api } from '@/lib/api'
 import {
@@ -83,10 +91,101 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  document.querySelector('meta[name="application-name"]')?.remove()
   queryClients.splice(0).forEach((client) => client.clear())
   apiClient.get = originalGet
   window.localStorage.clear()
   useSystemConfigStore.setState(useSystemConfigStore.getInitialState(), true)
+})
+
+describe('initial system branding', () => {
+  test.each([
+    { serverName: undefined, cachedName: undefined, expected: '玖亿 API' },
+    { serverName: '当前站点', cachedName: undefined, expected: '当前站点' },
+    { serverName: '当前站点', cachedName: '旧站点', expected: '当前站点' },
+    { serverName: undefined, cachedName: '缓存站点', expected: '缓存站点' },
+  ])(
+    'shows $expected before status loads, with server=$serverName and cache=$cachedName',
+    async (scenario) => {
+      if (scenario.serverName) {
+        const applicationName = document.createElement('meta')
+        applicationName.name = 'application-name'
+        applicationName.content = scenario.serverName
+        document.head.appendChild(applicationName)
+      }
+      const cachedStatus = scenario.cachedName
+        ? {
+            system_name: scenario.cachedName,
+            setup: false,
+            invoice_enabled: false,
+          }
+        : null
+      if (cachedStatus) {
+        window.localStorage.setItem('status', JSON.stringify(cachedStatus))
+        window.localStorage.setItem(
+          'system-config-storage',
+          JSON.stringify({
+            state: {
+              config: {
+                ...useSystemConfigStore.getState().config,
+                systemName: scenario.cachedName,
+              },
+            },
+            version: 0,
+          })
+        )
+      }
+      await useSystemConfigStore.persist.rehydrate()
+
+      let resolveStatus!: (value: { data: unknown }) => void
+      const response = new Promise<{ data: unknown }>((resolve) => {
+        resolveStatus = resolve
+      })
+      apiClient.get = (url) => {
+        statusRequests.push(url)
+        return response
+      }
+      const queryClient = createQueryClient()
+      const hook = renderHook(() => useStatus(), {
+        wrapper: wrapper(queryClient),
+      })
+      render(
+        <QueryClientProvider client={queryClient}>
+          <SidebarProvider>
+            <SystemBrand />
+          </SidebarProvider>
+        </QueryClientProvider>
+      )
+
+      expect(screen.getByText(scenario.expected)).toBeVisible()
+      expect(useSystemConfigStore.getState().config.systemName).toBe(
+        scenario.expected
+      )
+      expect(queryClient.getQueryData(STATUS_QUERY_KEY)).toBeUndefined()
+      expect(hook.result.current.status).toEqual(
+        cachedStatus
+          ? { ...cachedStatus, system_name: scenario.expected }
+          : null
+      )
+      expect(window.localStorage.getItem('status')).toBe(
+        cachedStatus ? JSON.stringify(cachedStatus) : null
+      )
+      expect(statusRequests).toEqual(['/api/status'])
+
+      resolveStatus({
+        data: {
+          success: true,
+          data: { system_name: '更新后的站点', setup: true },
+        },
+      })
+      expect(await screen.findByText('更新后的站点')).toBeVisible()
+      expect(hook.result.current.status?.system_name).toBe('更新后的站点')
+      expect(useSystemConfigStore.getState().config.systemName).toBe(
+        '更新后的站点'
+      )
+      expect(statusRequests).toHaveLength(1)
+    }
+  )
 })
 
 describe('shared status query deduplication', () => {

@@ -127,6 +127,11 @@ export function SidebarModulesCard() {
           description: t('Earn a percentage when referred users top up.'),
         },
         {
+          key: 'invoices',
+          title: t('Invoices'),
+          description: t('Apply for invoices and download issued PDFs.'),
+        },
+        {
           key: 'personal',
           title: t('Personal Settings'),
           description: t('Personal info settings'),

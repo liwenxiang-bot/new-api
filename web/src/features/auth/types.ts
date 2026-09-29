@@ -121,6 +121,8 @@ export interface SystemStatus {
     self_use_mode_enabled?: boolean
     display_in_currency?: boolean
     display_token_stat_enabled?: boolean
+    invoice_enabled?: boolean
+    invoice_min_amount_minor?: number
     quota_per_unit?: number
     quota_display_type?: string
     usd_exchange_rate?: number
@@ -139,6 +141,8 @@ export interface SystemStatus {
   }
   // Allow direct access to common properties
   version?: string
+  invoice_enabled?: boolean
+  invoice_min_amount_minor?: number
   system_name?: string
   logo?: string
   github_oauth?: boolean

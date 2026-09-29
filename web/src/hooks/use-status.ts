@@ -19,11 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 
 import type { SystemStatus } from '@/features/auth/types'
+import { getInitialSystemName } from '@/lib/dom-utils'
 import { readCachedStatus, statusQueryOptions } from '@/lib/status-query'
 
 /** Seed value from the persisted snapshot, so the first render is not empty. */
 function getInitialStatus(): SystemStatus | undefined {
-  return (readCachedStatus() as SystemStatus | null) ?? undefined
+  const cached = readCachedStatus() as SystemStatus | null
+  if (!cached) return undefined
+  return { ...cached, system_name: getInitialSystemName(cached.system_name) }
 }
 
 /**
@@ -35,8 +38,8 @@ function getInitialStatus(): SystemStatus | undefined {
 export function useStatus() {
   const { data, isLoading, error } = useQuery({
     ...statusQueryOptions,
-    // Use localStorage data as initial data
-    placeholderData: getInitialStatus(),
+    // The browser snapshot is only a placeholder, never guard query data.
+    placeholderData: getInitialStatus,
   })
 
   return {

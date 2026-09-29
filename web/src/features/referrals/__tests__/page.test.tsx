@@ -319,14 +319,13 @@ test('an unavailable transfer minimum cannot fall back to the previous threshold
 test('unconfirmed compliance disables transferring rewards', async () => {
   complianceConfirmed = false
   await renderPage()
-  expect(
-    await screen.findByRole('button', { name: 'Transfer to Balance' })
-  ).toBeDisabled()
-  expect(
-    screen.getByText(
-      'Referral reward transfer is disabled until the administrator confirms compliance terms.'
-    )
-  ).toBeVisible()
+  const transfer = await screen.findByRole('button', {
+    name: 'Transfer to Balance',
+  })
+  expect(transfer).toBeDisabled()
+  expect(transfer).toHaveAccessibleDescription(
+    /Referral reward transfer is disabled until the administrator confirms compliance terms/
+  )
 })
 
 test('reward history shows the referred user ID and requests the next server page', async () => {

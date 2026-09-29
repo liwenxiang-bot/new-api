@@ -25,6 +25,8 @@ import {
 } from './section-registry.tsx'
 
 const defaultBillingSettings: BillingSettings = {
+  'invoice_setting.enabled': true,
+  'invoice_setting.min_amount_minor': 50000,
   QuotaForNewUser: 0,
   QuotaForInviter: 0,
   QuotaForInvitee: 0,

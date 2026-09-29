@@ -45,6 +45,7 @@ func GetStatus(c *gin.Context) {
 
 	cs := console_setting.GetConsoleSetting()
 	passkeySetting := system_setting.PasskeySettingsSnapshot()
+	invoiceSetting := operation_setting.InvoiceSettingsSnapshot()
 	common.OptionMapRWMutex.RLock()
 	defer common.OptionMapRWMutex.RUnlock()
 
@@ -126,6 +127,8 @@ func GetStatus(c *gin.Context) {
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
+		"invoice_enabled":             invoiceSetting.Enabled,
+		"invoice_min_amount_minor":    invoiceSetting.MinAmountMinor,
 	}
 
 	// 根据启用状态注入可选内容

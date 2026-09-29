@@ -271,6 +271,8 @@ export type ModelSettings = {
 }
 
 export type BillingSettings = {
+  'invoice_setting.enabled': boolean
+  'invoice_setting.min_amount_minor': number
   QuotaForNewUser: number
   QuotaForInviter: number
   QuotaForInvitee: number

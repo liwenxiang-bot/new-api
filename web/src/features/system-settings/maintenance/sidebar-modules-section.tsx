@@ -132,6 +132,10 @@ export function SidebarModulesSection({
         title: t('Referral Rewards'),
         description: t('Earn a percentage when referred users top up.'),
       },
+      invoices: {
+        title: t('Invoices'),
+        description: t('Apply for invoices and download issued PDFs.'),
+      },
       personal: {
         title: t('Profile'),
         description: t('Personal settings and profile management.'),
@@ -165,6 +169,10 @@ export function SidebarModulesSection({
       subscription: {
         title: t('Subscription Management'),
         description: t('Manage subscription plans and pricing.'),
+      },
+      invoices: {
+        title: t('Invoice management'),
+        description: t('Review applications and upload issued invoices.'),
       },
     },
   }

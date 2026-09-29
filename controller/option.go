@@ -202,6 +202,17 @@ func UpdateOption(c *gin.Context) {
 		option.Value = fmt.Sprintf("%v", option.Value)
 	}
 	switch option.Key {
+	case "invoice_setting.enabled":
+		if option.Value != "true" && option.Value != "false" {
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
+	case "invoice_setting.min_amount_minor":
+		minimum, err := strconv.ParseInt(option.Value.(string), 10, 64)
+		if err != nil || minimum < 0 || minimum > model.InvoiceMaxAmountMinor {
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
 	case "QuotaForInviter", "QuotaForInvitee":
 		if isPositiveOptionValue(option.Value.(string)) && !operation_setting.IsPaymentComplianceConfirmed() {
 			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)

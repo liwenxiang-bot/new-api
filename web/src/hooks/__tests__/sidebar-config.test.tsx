@@ -45,12 +45,18 @@ afterEach(() => {
   useAuthStore.getState().auth.reset()
 })
 
-function sidebarFor(admin?: object, user?: object, canConfigure = true) {
+function sidebarFor(
+  admin?: object,
+  user?: object,
+  canConfigure = true,
+  invoiceEnabled: boolean | null = true
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   client.setQueryData(['status'], {
     SidebarModulesAdmin: admin ? JSON.stringify(admin) : '',
+    invoice_enabled: invoiceEnabled,
   })
   useAuthStore.getState().auth.setUser({
     id: 1,
@@ -83,7 +89,13 @@ describe('security sidebar visibility', () => {
       result.current
         .find((group) => group.id === 'personal')
         ?.items.map((item) => item.title)
-    ).toEqual(['Wallet', 'Referral Rewards', 'Profile', 'Security & Access'])
+    ).toEqual([
+      'Wallet',
+      'Referral Rewards',
+      'Invoices',
+      'Profile',
+      'Security & Access',
+    ])
     expect(
       result.current
         .flatMap((group) => group.items)
@@ -118,6 +130,50 @@ describe('security sidebar visibility', () => {
         .some((item) => item.title === 'Security & Access')
     ).toBe(true)
   })
+})
+
+describe('invoice sidebar visibility', () => {
+  it.each([false, null])(
+    'disabled or unavailable invoice status (%s) hides only the personal invoice entry',
+    (enabled) => {
+      const { result } = sidebarFor(undefined, undefined, true, enabled)
+      const titles = result.current
+        .flatMap((group) => group.items)
+        .map((item) => item.title)
+      expect(titles).not.toContain('Invoices')
+      expect(titles).toContain('Invoice management')
+    }
+  )
+  it('legacy configurations expose user invoices and administrator invoice management with independent toggles', () => {
+    const config = parseSidebarModulesAdmin(
+      '{"personal":{"enabled":true},"admin":{"enabled":true}}'
+    )
+    expect(config.personal.invoices).toBe(true)
+    expect(config.admin.invoices).toBe(true)
+    config.admin.invoices = false
+    const saved = parseSidebarModulesAdmin(serializeSidebarModulesAdmin(config))
+    const { result } = sidebarFor(saved)
+    const titles = result.current
+      .flatMap((group) => group.items)
+      .map((item) => item.title)
+    expect(titles).toContain('Invoices')
+    expect(titles).not.toContain('Invoice management')
+  })
+  it.each([
+    [{ personal: { enabled: true, invoices: false } }, undefined],
+    [{ personal: { enabled: false } }, undefined],
+    [undefined, { personal: { enabled: true, invoices: false } }],
+  ])(
+    'respects existing sidebar disablement for invoices (%j, %j)',
+    (admin, user) => {
+      const { result } = sidebarFor(admin, user)
+      expect(
+        result.current
+          .flatMap((group) => group.items)
+          .some((item) => item.title === 'Invoices')
+      ).toBe(false)
+    }
+  )
 })
 
 describe('audit log sidebar entry', () => {
